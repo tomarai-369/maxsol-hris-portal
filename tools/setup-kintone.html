@@ -1,0 +1,284 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>MaxSol HRIS - Kintone Setup Tool</title>
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; background: #f5f7fa; min-height: 100vh; padding: 40px 20px; }
+    .container { max-width: 800px; margin: 0 auto; }
+    h1 { color: #1e40af; margin-bottom: 10px; }
+    .subtitle { color: #6b7280; margin-bottom: 30px; }
+    .card { background: white; border-radius: 12px; padding: 30px; box-shadow: 0 4px 6px rgba(0,0,0,0.05); margin-bottom: 20px; }
+    label { display: block; font-weight: 500; margin-bottom: 8px; color: #374151; }
+    input { width: 100%; padding: 12px; border: 1px solid #d1d5db; border-radius: 8px; font-size: 16px; margin-bottom: 20px; }
+    input:focus { outline: none; border-color: #3b82f6; box-shadow: 0 0 0 3px rgba(59,130,246,0.1); }
+    button { background: #1e40af; color: white; border: none; padding: 14px 28px; border-radius: 8px; font-size: 16px; font-weight: 600; cursor: pointer; width: 100%; }
+    button:hover { background: #1d4ed8; }
+    button:disabled { background: #9ca3af; cursor: not-allowed; }
+    .log { background: #1f2937; color: #10b981; padding: 20px; border-radius: 8px; font-family: monospace; font-size: 14px; max-height: 400px; overflow-y: auto; white-space: pre-wrap; }
+    .success { background: #10b981; color: white; padding: 20px; border-radius: 8px; margin-top: 20px; }
+    .error { background: #ef4444; color: white; padding: 15px; border-radius: 8px; margin-bottom: 20px; }
+    .step { display: flex; align-items: center; margin-bottom: 15px; }
+    .step-num { background: #1e40af; color: white; width: 30px; height: 30px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-weight: 600; margin-right: 15px; }
+    .env-box { background: #f3f4f6; padding: 15px; border-radius: 8px; font-family: monospace; font-size: 13px; margin-top: 15px; }
+    .copy-btn { background: #6b7280; padding: 8px 16px; font-size: 14px; margin-top: 10px; width: auto; }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <h1>🏢 MaxSol HRIS Setup</h1>
+    <p class="subtitle">This tool will create all Kintone apps needed for the HRIS Portal</p>
+
+    <div class="card">
+      <div class="step">
+        <div class="step-num">1</div>
+        <div>Enter your Kintone credentials</div>
+      </div>
+
+      <label>Kintone Domain</label>
+      <input type="text" id="domain" value="ms-corp.cybozu.com" placeholder="your-subdomain.cybozu.com">
+
+      <label>Username</label>
+      <input type="text" id="username" value="Administrator">
+
+      <label>Password</label>
+      <input type="password" id="password" value="Edamame!2345">
+
+      <label>Space ID</label>
+      <input type="number" id="spaceId" value="37" placeholder="37">
+
+      <div id="error" class="error" style="display: none;"></div>
+
+      <button id="createBtn" onclick="createApps()">🚀 Create All HRIS Apps</button>
+    </div>
+
+    <div class="card">
+      <div class="step">
+        <div class="step-num">2</div>
+        <div>Setup Progress</div>
+      </div>
+      <div id="log" class="log">Ready to create apps...\n\nThis will create:\n• HRIS - Employees\n• HRIS - Leave Requests\n• HRIS - Document Requests\n• HRIS - Announcements\n• HRIS - Leave Balances</div>
+    </div>
+
+    <div id="result" style="display: none;">
+      <div class="card success">
+        <h3>✅ All Apps Created Successfully!</h3>
+        <p style="margin-top: 10px;">Copy these environment variables to Railway:</p>
+        <div class="env-box" id="envVars"></div>
+        <button class="copy-btn" onclick="copyEnv()">📋 Copy to Clipboard</button>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    const log = (msg) => {
+      const el = document.getElementById('log');
+      el.textContent += msg + '\n';
+      el.scrollTop = el.scrollHeight;
+    };
+
+    const showError = (msg) => {
+      const el = document.getElementById('error');
+      el.textContent = msg;
+      el.style.display = 'block';
+    };
+
+    async function kintoneRequest(domain, auth, endpoint, method, body) {
+      const url = `https://${domain}/k/v1/${endpoint}`;
+      const res = await fetch(url, {
+        method,
+        headers: {
+          'X-Cybozu-Authorization': auth,
+          'Content-Type': 'application/json',
+        },
+        body: body ? JSON.stringify(body) : undefined,
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.message || 'API Error');
+      return data;
+    }
+
+    async function createApps() {
+      const domain = document.getElementById('domain').value;
+      const username = document.getElementById('username').value;
+      const password = document.getElementById('password').value;
+      const spaceId = parseInt(document.getElementById('spaceId').value);
+      const auth = btoa(`${username}:${password}`);
+      const btn = document.getElementById('createBtn');
+
+      btn.disabled = true;
+      btn.textContent = 'Creating...';
+      document.getElementById('log').textContent = '';
+      document.getElementById('error').style.display = 'none';
+
+      try {
+        const apps = {};
+
+        // 1. EMPLOYEES
+        log('📋 Creating HRIS - Employees...');
+        let result = await kintoneRequest(domain, auth, 'preview/app.json', 'POST', { name: 'HRIS - Employees', space: spaceId });
+        apps.employees = result.app;
+        log(`   ✓ Created (App ID: ${apps.employees})`);
+
+        await kintoneRequest(domain, auth, 'preview/app/form/fields.json', 'POST', {
+          app: apps.employees,
+          properties: {
+            employee_id: { type: 'SINGLE_LINE_TEXT', code: 'employee_id', label: 'Employee ID', required: true, unique: true },
+            email: { type: 'SINGLE_LINE_TEXT', code: 'email', label: 'Email', required: true, unique: true },
+            first_name: { type: 'SINGLE_LINE_TEXT', code: 'first_name', label: 'First Name', required: true },
+            last_name: { type: 'SINGLE_LINE_TEXT', code: 'last_name', label: 'Last Name', required: true },
+            middle_name: { type: 'SINGLE_LINE_TEXT', code: 'middle_name', label: 'Middle Name' },
+            department: { type: 'DROP_DOWN', code: 'department', label: 'Department', required: true,
+              options: { 'Operations': {label:'Operations',index:'0'}, 'Finance': {label:'Finance',index:'1'}, 'HR': {label:'HR',index:'2'}, 'IT': {label:'IT',index:'3'}, 'Manpower': {label:'Manpower',index:'4'}, 'Sales': {label:'Sales',index:'5'}, 'Admin': {label:'Admin',index:'6'} }},
+            position: { type: 'SINGLE_LINE_TEXT', code: 'position', label: 'Position', required: true },
+            employment_status: { type: 'DROP_DOWN', code: 'employment_status', label: 'Status', required: true,
+              options: { 'Regular': {label:'Regular',index:'0'}, 'Probationary': {label:'Probationary',index:'1'}, 'Contractual': {label:'Contractual',index:'2'}, 'Project-Based': {label:'Project-Based',index:'3'} }},
+            date_hired: { type: 'DATE', code: 'date_hired', label: 'Date Hired', required: true },
+            birth_date: { type: 'DATE', code: 'birth_date', label: 'Birth Date' },
+            contact_number: { type: 'SINGLE_LINE_TEXT', code: 'contact_number', label: 'Contact' },
+            address: { type: 'MULTI_LINE_TEXT', code: 'address', label: 'Address' },
+            emergency_contact: { type: 'SINGLE_LINE_TEXT', code: 'emergency_contact', label: 'Emergency Contact' },
+            emergency_number: { type: 'SINGLE_LINE_TEXT', code: 'emergency_number', label: 'Emergency Number' },
+            password_hash: { type: 'SINGLE_LINE_TEXT', code: 'password_hash', label: 'Password Hash' },
+            is_verified: { type: 'RADIO_BUTTON', code: 'is_verified', label: 'Verified', required: true, defaultValue: 'No',
+              options: { 'Yes': {label:'Yes',index:'0'}, 'No': {label:'No',index:'1'} }},
+            verification_token: { type: 'SINGLE_LINE_TEXT', code: 'verification_token', label: 'Token' }
+          }
+        });
+        log('   ✓ Fields added');
+
+        // 2. LEAVE REQUESTS
+        log('📋 Creating HRIS - Leave Requests...');
+        result = await kintoneRequest(domain, auth, 'preview/app.json', 'POST', { name: 'HRIS - Leave Requests', space: spaceId });
+        apps.leaveRequests = result.app;
+        log(`   ✓ Created (App ID: ${apps.leaveRequests})`);
+
+        await kintoneRequest(domain, auth, 'preview/app/form/fields.json', 'POST', {
+          app: apps.leaveRequests,
+          properties: {
+            employee_id: { type: 'SINGLE_LINE_TEXT', code: 'employee_id', label: 'Employee ID', required: true },
+            employee_name: { type: 'SINGLE_LINE_TEXT', code: 'employee_name', label: 'Name', required: true },
+            leave_type: { type: 'DROP_DOWN', code: 'leave_type', label: 'Leave Type', required: true,
+              options: { 'Vacation Leave': {label:'Vacation Leave',index:'0'}, 'Sick Leave': {label:'Sick Leave',index:'1'}, 'Emergency Leave': {label:'Emergency Leave',index:'2'}, 'Leave Without Pay': {label:'Leave Without Pay',index:'3'} }},
+            start_date: { type: 'DATE', code: 'start_date', label: 'Start', required: true },
+            end_date: { type: 'DATE', code: 'end_date', label: 'End', required: true },
+            total_days: { type: 'NUMBER', code: 'total_days', label: 'Days', required: true },
+            reason: { type: 'MULTI_LINE_TEXT', code: 'reason', label: 'Reason', required: true },
+            status: { type: 'DROP_DOWN', code: 'status', label: 'Status', required: true, defaultValue: 'Pending',
+              options: { 'Pending': {label:'Pending',index:'0'}, 'Approved': {label:'Approved',index:'1'}, 'Rejected': {label:'Rejected',index:'2'} }},
+            approver: { type: 'SINGLE_LINE_TEXT', code: 'approver', label: 'Approver' },
+            approved_date: { type: 'DATE', code: 'approved_date', label: 'Approved Date' },
+            remarks: { type: 'MULTI_LINE_TEXT', code: 'remarks', label: 'Remarks' },
+            created_at: { type: 'DATE', code: 'created_at', label: 'Created At' }
+          }
+        });
+        log('   ✓ Fields added');
+
+        // 3. DOCUMENT REQUESTS
+        log('📋 Creating HRIS - Document Requests...');
+        result = await kintoneRequest(domain, auth, 'preview/app.json', 'POST', { name: 'HRIS - Document Requests', space: spaceId });
+        apps.docRequests = result.app;
+        log(`   ✓ Created (App ID: ${apps.docRequests})`);
+
+        await kintoneRequest(domain, auth, 'preview/app/form/fields.json', 'POST', {
+          app: apps.docRequests,
+          properties: {
+            employee_id: { type: 'SINGLE_LINE_TEXT', code: 'employee_id', label: 'Employee ID', required: true },
+            employee_name: { type: 'SINGLE_LINE_TEXT', code: 'employee_name', label: 'Name', required: true },
+            document_type: { type: 'DROP_DOWN', code: 'document_type', label: 'Document', required: true,
+              options: { 'COE': {label:'COE',index:'0'}, 'COE with Compensation': {label:'COE with Compensation',index:'1'}, 'ITR/BIR 2316': {label:'ITR/BIR 2316',index:'2'}, 'Payslip': {label:'Payslip',index:'3'}, 'SSS/PHIC/HDMF Cert': {label:'SSS/PHIC/HDMF Cert',index:'4'} }},
+            purpose: { type: 'SINGLE_LINE_TEXT', code: 'purpose', label: 'Purpose', required: true },
+            quantity: { type: 'NUMBER', code: 'quantity', label: 'Qty', required: true, defaultValue: '1' },
+            status: { type: 'DROP_DOWN', code: 'status', label: 'Status', required: true, defaultValue: 'Pending',
+              options: { 'Pending': {label:'Pending',index:'0'}, 'Processing': {label:'Processing',index:'1'}, 'Ready': {label:'Ready',index:'2'}, 'Released': {label:'Released',index:'3'} }},
+            remarks: { type: 'MULTI_LINE_TEXT', code: 'remarks', label: 'Remarks' },
+            release_date: { type: 'DATE', code: 'release_date', label: 'Release Date' },
+            created_at: { type: 'DATE', code: 'created_at', label: 'Created At' }
+          }
+        });
+        log('   ✓ Fields added');
+
+        // 4. ANNOUNCEMENTS
+        log('📋 Creating HRIS - Announcements...');
+        result = await kintoneRequest(domain, auth, 'preview/app.json', 'POST', { name: 'HRIS - Announcements', space: spaceId });
+        apps.announcements = result.app;
+        log(`   ✓ Created (App ID: ${apps.announcements})`);
+
+        await kintoneRequest(domain, auth, 'preview/app/form/fields.json', 'POST', {
+          app: apps.announcements,
+          properties: {
+            title: { type: 'SINGLE_LINE_TEXT', code: 'title', label: 'Title', required: true },
+            content: { type: 'MULTI_LINE_TEXT', code: 'content', label: 'Content', required: true },
+            category: { type: 'DROP_DOWN', code: 'category', label: 'Category', required: true, defaultValue: 'General',
+              options: { 'General': {label:'General',index:'0'}, 'HR Policy': {label:'HR Policy',index:'1'}, 'Benefits': {label:'Benefits',index:'2'}, 'Events': {label:'Events',index:'3'} }},
+            priority: { type: 'DROP_DOWN', code: 'priority', label: 'Priority', required: true, defaultValue: 'Normal',
+              options: { 'High': {label:'High',index:'0'}, 'Medium': {label:'Medium',index:'1'}, 'Normal': {label:'Normal',index:'2'} }},
+            publish_date: { type: 'DATE', code: 'publish_date', label: 'Publish Date', required: true },
+            expiry_date: { type: 'DATE', code: 'expiry_date', label: 'Expiry' },
+            is_active: { type: 'RADIO_BUTTON', code: 'is_active', label: 'Active', required: true, defaultValue: 'Yes',
+              options: { 'Yes': {label:'Yes',index:'0'}, 'No': {label:'No',index:'1'} }}
+          }
+        });
+        log('   ✓ Fields added');
+
+        // 5. LEAVE BALANCES
+        log('📋 Creating HRIS - Leave Balances...');
+        result = await kintoneRequest(domain, auth, 'preview/app.json', 'POST', { name: 'HRIS - Leave Balances', space: spaceId });
+        apps.leaveBalances = result.app;
+        log(`   ✓ Created (App ID: ${apps.leaveBalances})`);
+
+        await kintoneRequest(domain, auth, 'preview/app/form/fields.json', 'POST', {
+          app: apps.leaveBalances,
+          properties: {
+            employee_id: { type: 'SINGLE_LINE_TEXT', code: 'employee_id', label: 'Employee ID', required: true },
+            leave_type: { type: 'DROP_DOWN', code: 'leave_type', label: 'Leave Type', required: true,
+              options: { 'Vacation Leave': {label:'Vacation Leave',index:'0'}, 'Sick Leave': {label:'Sick Leave',index:'1'}, 'Emergency Leave': {label:'Emergency Leave',index:'2'} }},
+            total_credits: { type: 'NUMBER', code: 'total_credits', label: 'Total', required: true, defaultValue: '0' },
+            used: { type: 'NUMBER', code: 'used', label: 'Used', required: true, defaultValue: '0' },
+            remaining: { type: 'CALC', code: 'remaining', label: 'Remaining', expression: 'total_credits - used', format: 'NUMBER' }
+          }
+        });
+        log('   ✓ Fields added');
+
+        // Deploy all apps
+        log('\n🚀 Deploying all apps...');
+        await kintoneRequest(domain, auth, 'preview/app/deploy.json', 'POST', {
+          apps: Object.values(apps).map(app => ({ app }))
+        });
+        log('   ✓ All apps deployed!\n');
+
+        // Show results
+        const envVars = `KINTONE_DOMAIN=${domain}
+KINTONE_APP_EMPLOYEES=${apps.employees}
+KINTONE_APP_LEAVE_REQUESTS=${apps.leaveRequests}
+KINTONE_APP_DOCUMENT_REQUESTS=${apps.docRequests}
+KINTONE_APP_ANNOUNCEMENTS=${apps.announcements}
+KINTONE_APP_LEAVE_BALANCES=${apps.leaveBalances}`;
+
+        document.getElementById('envVars').textContent = envVars;
+        document.getElementById('result').style.display = 'block';
+
+        log('========================================');
+        log('✅ SETUP COMPLETE!');
+        log('========================================');
+        log(`\nView your apps at:\nhttps://${domain}/k/#/space/${spaceId}`);
+
+      } catch (e) {
+        showError(e.message);
+        log('\n❌ Error: ' + e.message);
+      } finally {
+        btn.disabled = false;
+        btn.textContent = '🚀 Create All HRIS Apps';
+      }
+    }
+
+    function copyEnv() {
+      const text = document.getElementById('envVars').textContent;
+      navigator.clipboard.writeText(text);
+      alert('Copied to clipboard!');
+    }
+  </script>
+</body>
+</html>
