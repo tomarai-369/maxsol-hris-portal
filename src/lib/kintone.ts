@@ -107,13 +107,21 @@ export async function addRecord(appId: number, record: any): Promise<{ id: strin
 export async function updateRecord(
   appId: number,
   recordId: number,
-  record: any
+  record: any,
+  revision?: string
 ): Promise<{ revision: string }> {
-  return kintoneRequest('record.json', 'PUT', {
+  const body: any = {
     app: appId,
     id: recordId,
     record,
-  });
+  };
+  
+  // If revision provided, use it; otherwise Kintone will use latest
+  if (revision) {
+    body.revision = revision;
+  }
+  
+  return kintoneRequest('record.json', 'PUT', body);
 }
 
 // =====================
