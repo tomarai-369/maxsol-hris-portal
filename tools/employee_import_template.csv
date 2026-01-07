@@ -1,0 +1,6 @@
+employee_id,email,first_name,last_name,middle_name,department,position,employment_status,date_hired,birth_date,contact_number,address
+EMP001,juan.delacruz@gmail.com,Juan,Dela Cruz,Santos,Manpower,Field Worker,Regular,2024-01-15,1990-05-20,09171234567,"123 Main St, Taguig, Metro Manila"
+EMP002,maria.santos@gmail.com,Maria,Santos,Garcia,Manpower,Supervisor,Regular,2024-02-01,1988-12-10,09181234567,"456 Oak Ave, Makati City"
+EMP003,pedro.reyes@gmail.com,Pedro,Reyes,,Operations,Driver,Contractual,2024-03-10,1995-08-15,09191234567,"789 Pine Rd, Quezon City"
+EMP004,ana.garcia@gmail.com,Ana,Garcia,Lopez,HR,HR Assistant,Probationary,2024-04-01,1992-03-25,09201234567,"321 Elm St, Pasig City"
+EMP005,carlos.mendoza@gmail.com,Carlos,Mendoza,Cruz,Manpower,Team Leader,Regular,2023-06-15,1985-11-30,09211234567,"654 Cedar Ln, Paranaque"
