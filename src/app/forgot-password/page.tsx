@@ -1,131 +1,84 @@
 'use client';
 
-import { useState } from 'react';
 import Link from 'next/link';
-import { Mail, ArrowLeft, Loader2, CheckCircle } from 'lucide-react';
+import { ArrowLeft, Mail, Phone, Building2 } from 'lucide-react';
 
 export default function ForgotPasswordPage() {
-  const [email, setEmail] = useState('');
-  const [loading, setLoading] = useState(false);
-  const [error, setError] = useState('');
-  const [success, setSuccess] = useState(false);
-
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    setError('');
-    setLoading(true);
-
-    try {
-      const res = await fetch('/api/auth/forgot-password', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ email }),
-      });
-
-      const data = await res.json();
-
-      if (!res.ok) {
-        setError(data.error || 'Failed to send reset link');
-        return;
-      }
-
-      setSuccess(true);
-    } catch (err) {
-      setError('An error occurred. Please try again.');
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  if (success) {
-    return (
-      <div className="min-h-screen flex items-center justify-center bg-gray-50 p-4">
-        <div className="w-full max-w-md">
-          <div className="bg-white rounded-2xl shadow-xl p-8 text-center">
-            <div className="w-16 h-16 bg-green-100 rounded-full flex items-center justify-center mx-auto mb-6">
-              <CheckCircle className="w-8 h-8 text-green-600" />
-            </div>
-            <h2 className="text-2xl font-bold text-gray-900 mb-2">Check Your Email</h2>
-            <p className="text-gray-600 mb-6">
-              If an account exists for <strong>{email}</strong>, you will receive a password reset link shortly.
-            </p>
-            <Link
-              href="/"
-              className="inline-flex items-center text-mscorp-blue hover:text-mscorp-dark"
-            >
-              <ArrowLeft className="w-4 h-4 mr-2" />
-              Back to Login
-            </Link>
-          </div>
-        </div>
-      </div>
-    );
-  }
-
   return (
-    <div className="min-h-screen flex items-center justify-center bg-gray-50 p-4">
+    <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-gray-50 to-blue-50 p-4">
       <div className="w-full max-w-md">
         <div className="text-center mb-8">
-          <div className="w-16 h-16 bg-mscorp-blue rounded-xl flex items-center justify-center mx-auto mb-4">
-            <span className="text-2xl font-bold text-white">MS</span>
-          </div>
-          <h1 className="text-2xl font-bold text-gray-900">MS Corp</h1>
-          <p className="text-gray-600">Manpower Division</p>
+          <img 
+            src="https://mscorp.com.ph/MSC-logo-png-file.png" 
+            alt="MS Corp" 
+            className="w-16 h-16 object-contain mx-auto mb-4"
+          />
+          <h1 className="text-xl font-bold text-gray-900">MS Corp HRIS</h1>
         </div>
 
         <div className="bg-white rounded-2xl shadow-xl p-8">
-          <h2 className="text-2xl font-bold text-gray-900 mb-2">Forgot Password</h2>
-          <p className="text-gray-600 mb-8">
-            Enter your email and we'll send you a reset link
-          </p>
-
-          {error && (
-            <div className="mb-6 p-4 bg-red-50 border border-red-200 rounded-lg text-red-700 text-sm">
-              {error}
+          <div className="text-center mb-6">
+            <div className="w-16 h-16 bg-blue-100 rounded-full flex items-center justify-center mx-auto mb-4">
+              <Mail className="w-8 h-8 text-mscorp-blue" />
             </div>
-          )}
+            <h2 className="text-2xl font-bold text-gray-900 mb-2">Forgot Password?</h2>
+            <p className="text-gray-600">
+              Please contact the HR Department to reset your password.
+            </p>
+          </div>
 
-          <form onSubmit={handleSubmit} className="space-y-6">
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">
-                Email Address
-              </label>
-              <div className="relative">
-                <Mail className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-5 h-5" />
-                <input
-                  type="email"
-                  value={email}
-                  onChange={(e) => setEmail(e.target.value)}
-                  className="w-full pl-10 pr-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-mscorp-blue focus:border-transparent"
-                  placeholder="your.email@company.com"
-                  required
-                />
+          <div className="space-y-4">
+            <a 
+              href="mailto:hr@mscorp.com.ph?subject=Password Reset Request"
+              className="flex items-center gap-4 p-4 border border-gray-200 rounded-lg hover:bg-gray-50 transition-colors"
+            >
+              <div className="w-12 h-12 bg-blue-100 rounded-lg flex items-center justify-center">
+                <Mail className="w-6 h-6 text-mscorp-blue" />
+              </div>
+              <div>
+                <p className="font-medium text-gray-900">Email HR</p>
+                <p className="text-sm text-gray-500">hr@mscorp.com.ph</p>
+              </div>
+            </a>
+
+            <a 
+              href="tel:+6328123456"
+              className="flex items-center gap-4 p-4 border border-gray-200 rounded-lg hover:bg-gray-50 transition-colors"
+            >
+              <div className="w-12 h-12 bg-green-100 rounded-lg flex items-center justify-center">
+                <Phone className="w-6 h-6 text-green-600" />
+              </div>
+              <div>
+                <p className="font-medium text-gray-900">Call HR</p>
+                <p className="text-sm text-gray-500">(02) 8-123-4567</p>
+              </div>
+            </a>
+
+            <div className="flex items-center gap-4 p-4 border border-gray-200 rounded-lg bg-gray-50">
+              <div className="w-12 h-12 bg-gray-200 rounded-lg flex items-center justify-center">
+                <Building2 className="w-6 h-6 text-gray-500" />
+              </div>
+              <div>
+                <p className="font-medium text-gray-900">Visit HR Office</p>
+                <p className="text-sm text-gray-500">2nd Floor, Main Building</p>
               </div>
             </div>
-
-            <button
-              type="submit"
-              disabled={loading}
-              className="w-full py-3 px-4 bg-mscorp-blue text-white font-medium rounded-lg hover:bg-mscorp-dark transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center"
-            >
-              {loading ? (
-                <>
-                  <Loader2 className="w-5 h-5 mr-2 animate-spin" />
-                  Sending...
-                </>
-              ) : (
-                'Send Reset Link'
-              )}
-            </button>
-          </form>
+          </div>
 
           <div className="mt-8 pt-6 border-t border-gray-200 text-center">
-            <Link href="/" className="inline-flex items-center text-mscorp-blue hover:text-mscorp-dark">
+            <Link 
+              href="/" 
+              className="inline-flex items-center text-mscorp-blue hover:text-mscorp-dark font-medium"
+            >
               <ArrowLeft className="w-4 h-4 mr-2" />
               Back to Login
             </Link>
           </div>
         </div>
+
+        <p className="mt-6 text-center text-sm text-gray-500">
+          For security reasons, password resets must be processed by HR.
+        </p>
       </div>
     </div>
   );
