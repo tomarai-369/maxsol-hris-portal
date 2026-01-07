@@ -46,18 +46,20 @@ export default function LoginPage() {
       <div className="hidden lg:flex lg:w-1/2 bg-gradient-to-br from-mscorp-dark via-mscorp-blue to-mscorp-light items-center justify-center p-12">
         <div className="text-white text-center">
           <div className="mb-8">
-            <div className="w-24 h-24 bg-white/10 rounded-2xl flex items-center justify-center mx-auto mb-6 backdrop-blur-sm">
-              <span className="text-4xl font-bold">MS</span>
-            </div>
-            <h1 className="text-4xl font-bold mb-2">MS Corp</h1>
-            <p className="text-xl text-blue-200">Manpower Division</p>
+            <img 
+              src="https://mscorp.com.ph/MSC-logo-png-file.png" 
+              alt="MS Corp" 
+              className="w-32 h-32 object-contain mx-auto mb-6 bg-white rounded-2xl p-4"
+            />
+            <h1 className="text-4xl font-bold mb-2">MS Corp HRIS</h1>
+            <p className="text-xl text-blue-200">Employee Portal</p>
           </div>
           <div className="space-y-4 text-blue-100">
             <p className="text-lg">Employee Self-Service Portal</p>
             <div className="flex flex-wrap justify-center gap-3 mt-6">
+              <span className="px-4 py-2 bg-white/10 rounded-full text-sm backdrop-blur-sm">Time & Attendance</span>
               <span className="px-4 py-2 bg-white/10 rounded-full text-sm backdrop-blur-sm">Leave Requests</span>
-              <span className="px-4 py-2 bg-white/10 rounded-full text-sm backdrop-blur-sm">Document Requests</span>
-              <span className="px-4 py-2 bg-white/10 rounded-full text-sm backdrop-blur-sm">Profile Management</span>
+              <span className="px-4 py-2 bg-white/10 rounded-full text-sm backdrop-blur-sm">Payslips</span>
             </div>
           </div>
         </div>
