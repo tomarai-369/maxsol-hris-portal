@@ -9,8 +9,12 @@ import {
   TrendingUp,
   Clock,
   CheckCircle,
-  AlertCircle,
   ArrowRight,
+  Wallet,
+  Shield,
+  MapPin,
+  Landmark,
+  User,
 } from 'lucide-react';
 
 interface DashboardData {
@@ -39,6 +43,12 @@ interface DashboardData {
   }>;
 }
 
+interface ClockStatus {
+  isClockedIn: boolean;
+  timeIn?: string;
+  hasLunchOut?: boolean;
+}
+
 const statusColors: Record<string, string> = {
   Pending: 'bg-yellow-100 text-yellow-800',
   Approved: 'bg-green-100 text-green-800',
@@ -49,9 +59,17 @@ const statusColors: Record<string, string> = {
 export default function DashboardPage() {
   const [data, setData] = useState<DashboardData | null>(null);
   const [loading, setLoading] = useState(true);
+  const [currentTime, setCurrentTime] = useState(new Date());
+  const [clockStatus, setClockStatus] = useState<ClockStatus>({ isClockedIn: false });
+  const [clocking, setClocking] = useState(false);
 
   useEffect(() => {
     fetchDashboardData();
+    fetchClockStatus();
+    
+    // Update time every second
+    const timer = setInterval(() => setCurrentTime(new Date()), 1000);
+    return () => clearInterval(timer);
   }, []);
 
   const fetchDashboardData = async () => {
@@ -68,6 +86,68 @@ export default function DashboardPage() {
     }
   };
 
+  const fetchClockStatus = async () => {
+    try {
+      const res = await fetch('/api/dtr/today');
+      if (res.ok) {
+        const result = await res.json();
+        setClockStatus(result);
+      }
+    } catch (error) {
+      console.error('Failed to fetch clock status:', error);
+    }
+  };
+
+  const handleClock = async (action: 'in' | 'out') => {
+    setClocking(true);
+    try {
+      // Get GPS location
+      let location = null;
+      if (navigator.geolocation) {
+        try {
+          const pos = await new Promise<GeolocationPosition>((resolve, reject) => {
+            navigator.geolocation.getCurrentPosition(resolve, reject, { timeout: 5000 });
+          });
+          location = `${pos.coords.latitude},${pos.coords.longitude}`;
+        } catch (e) {
+          console.log('GPS not available');
+        }
+      }
+
+      const res = await fetch('/api/dtr/clock', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action, location }),
+      });
+
+      if (res.ok) {
+        await fetchClockStatus();
+      }
+    } catch (error) {
+      console.error('Clock error:', error);
+    } finally {
+      setClocking(false);
+    }
+  };
+
+  const formatTime = (date: Date) => {
+    return date.toLocaleTimeString('en-US', {
+      hour: '2-digit',
+      minute: '2-digit',
+      second: '2-digit',
+      hour12: true,
+    });
+  };
+
+  const formatDate = (date: Date) => {
+    return date.toLocaleDateString('en-US', {
+      weekday: 'long',
+      year: 'numeric',
+      month: 'long',
+      day: 'numeric',
+    });
+  };
+
   if (loading) {
     return (
       <div className="flex items-center justify-center h-64">
@@ -78,115 +158,183 @@ export default function DashboardPage() {
 
   return (
     <div className="space-y-6">
-      {/* Page Header */}
-      <div>
-        <h1 className="text-2xl font-bold text-gray-900">Dashboard</h1>
-        <p className="text-gray-600">Welcome to your HR Portal</p>
-      </div>
-
-      {/* Quick Stats */}
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-        <div className="bg-white rounded-xl p-6 shadow-sm border">
-          <div className="flex items-center justify-between">
-            <div>
-              <p className="text-sm text-gray-600">Vacation Leave</p>
-              <p className="text-3xl font-bold text-gray-900 mt-1">
-                {data?.leaveBalance.vacation || 0}
+      {/* Time Clock Widget */}
+      <div className="bg-gradient-to-r from-mscorp-dark via-mscorp-blue to-mscorp-light rounded-2xl p-6 text-white">
+        <div className="flex flex-col md:flex-row items-center justify-between gap-6">
+          <div className="text-center md:text-left">
+            <p className="text-blue-200 text-sm mb-1">{formatDate(currentTime)}</p>
+            <p className="text-4xl md:text-5xl font-bold font-mono tracking-wider">
+              {formatTime(currentTime)}
+            </p>
+            {clockStatus.isClockedIn && clockStatus.timeIn && (
+              <p className="text-blue-200 text-sm mt-2">
+                <Clock className="w-4 h-4 inline mr-1" />
+                Clocked in at {clockStatus.timeIn}
               </p>
-              <p className="text-xs text-gray-500 mt-1">days remaining</p>
-            </div>
-            <div className="w-12 h-12 bg-blue-100 rounded-xl flex items-center justify-center">
-              <Calendar className="w-6 h-6 text-blue-600" />
-            </div>
+            )}
           </div>
-        </div>
-
-        <div className="bg-white rounded-xl p-6 shadow-sm border">
-          <div className="flex items-center justify-between">
-            <div>
-              <p className="text-sm text-gray-600">Sick Leave</p>
-              <p className="text-3xl font-bold text-gray-900 mt-1">
-                {data?.leaveBalance.sick || 0}
-              </p>
-              <p className="text-xs text-gray-500 mt-1">days remaining</p>
-            </div>
-            <div className="w-12 h-12 bg-red-100 rounded-xl flex items-center justify-center">
-              <TrendingUp className="w-6 h-6 text-red-600" />
-            </div>
-          </div>
-        </div>
-
-        <div className="bg-white rounded-xl p-6 shadow-sm border">
-          <div className="flex items-center justify-between">
-            <div>
-              <p className="text-sm text-gray-600">Pending Leave</p>
-              <p className="text-3xl font-bold text-gray-900 mt-1">
-                {data?.pendingRequests.leave || 0}
-              </p>
-              <p className="text-xs text-gray-500 mt-1">requests</p>
-            </div>
-            <div className="w-12 h-12 bg-yellow-100 rounded-xl flex items-center justify-center">
-              <Clock className="w-6 h-6 text-yellow-600" />
-            </div>
-          </div>
-        </div>
-
-        <div className="bg-white rounded-xl p-6 shadow-sm border">
-          <div className="flex items-center justify-between">
-            <div>
-              <p className="text-sm text-gray-600">Pending Documents</p>
-              <p className="text-3xl font-bold text-gray-900 mt-1">
-                {data?.pendingRequests.documents || 0}
-              </p>
-              <p className="text-xs text-gray-500 mt-1">requests</p>
-            </div>
-            <div className="w-12 h-12 bg-purple-100 rounded-xl flex items-center justify-center">
-              <FileText className="w-6 h-6 text-purple-600" />
-            </div>
+          
+          <div className="flex gap-3">
+            {!clockStatus.isClockedIn ? (
+              <button
+                onClick={() => handleClock('in')}
+                disabled={clocking}
+                className="px-6 py-3 bg-green-500 hover:bg-green-600 text-white font-semibold rounded-xl shadow-lg transition-all flex items-center gap-2 disabled:opacity-50"
+              >
+                {clocking ? (
+                  <div className="w-5 h-5 border-2 border-white border-t-transparent rounded-full animate-spin" />
+                ) : (
+                  <MapPin className="w-5 h-5" />
+                )}
+                Clock In
+              </button>
+            ) : (
+              <button
+                onClick={() => handleClock('out')}
+                disabled={clocking}
+                className="px-6 py-3 bg-red-500 hover:bg-red-600 text-white font-semibold rounded-xl shadow-lg transition-all flex items-center gap-2 disabled:opacity-50"
+              >
+                {clocking ? (
+                  <div className="w-5 h-5 border-2 border-white border-t-transparent rounded-full animate-spin" />
+                ) : (
+                  <Clock className="w-5 h-5" />
+                )}
+                Clock Out
+              </button>
+            )}
+            <Link
+              href="/dashboard/dtr"
+              className="px-4 py-3 bg-white/20 hover:bg-white/30 text-white rounded-xl transition-all flex items-center gap-2"
+            >
+              View DTR
+              <ArrowRight className="w-4 h-4" />
+            </Link>
           </div>
         </div>
       </div>
 
-      {/* Quick Actions */}
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+      {/* Leave Balance Cards */}
+      <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+        <div className="bg-white rounded-xl p-5 shadow-sm border hover:shadow-md transition-shadow">
+          <div className="flex items-center justify-between mb-3">
+            <div className="w-10 h-10 bg-blue-100 rounded-lg flex items-center justify-center">
+              <Calendar className="w-5 h-5 text-blue-600" />
+            </div>
+            <span className="text-2xl font-bold text-gray-900">
+              {data?.leaveBalance.vacation || 0}
+            </span>
+          </div>
+          <p className="text-sm text-gray-600">Vacation Leave</p>
+          <p className="text-xs text-gray-400">days remaining</p>
+        </div>
+
+        <div className="bg-white rounded-xl p-5 shadow-sm border hover:shadow-md transition-shadow">
+          <div className="flex items-center justify-between mb-3">
+            <div className="w-10 h-10 bg-red-100 rounded-lg flex items-center justify-center">
+              <TrendingUp className="w-5 h-5 text-red-600" />
+            </div>
+            <span className="text-2xl font-bold text-gray-900">
+              {data?.leaveBalance.sick || 0}
+            </span>
+          </div>
+          <p className="text-sm text-gray-600">Sick Leave</p>
+          <p className="text-xs text-gray-400">days remaining</p>
+        </div>
+
+        <div className="bg-white rounded-xl p-5 shadow-sm border hover:shadow-md transition-shadow">
+          <div className="flex items-center justify-between mb-3">
+            <div className="w-10 h-10 bg-yellow-100 rounded-lg flex items-center justify-center">
+              <Clock className="w-5 h-5 text-yellow-600" />
+            </div>
+            <span className="text-2xl font-bold text-gray-900">
+              {data?.pendingRequests.leave || 0}
+            </span>
+          </div>
+          <p className="text-sm text-gray-600">Pending Leaves</p>
+          <p className="text-xs text-gray-400">awaiting approval</p>
+        </div>
+
+        <div className="bg-white rounded-xl p-5 shadow-sm border hover:shadow-md transition-shadow">
+          <div className="flex items-center justify-between mb-3">
+            <div className="w-10 h-10 bg-purple-100 rounded-lg flex items-center justify-center">
+              <FileText className="w-5 h-5 text-purple-600" />
+            </div>
+            <span className="text-2xl font-bold text-gray-900">
+              {data?.pendingRequests.documents || 0}
+            </span>
+          </div>
+          <p className="text-sm text-gray-600">Pending Docs</p>
+          <p className="text-xs text-gray-400">being processed</p>
+        </div>
+      </div>
+
+      {/* Quick Actions Grid */}
+      <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-6 gap-4">
         <Link
           href="/dashboard/leave?action=new"
-          className="bg-gradient-to-br from-blue-500 to-blue-600 rounded-xl p-6 text-white hover:from-blue-600 hover:to-blue-700 transition-all card-hover"
+          className="bg-white rounded-xl p-4 shadow-sm border hover:shadow-md hover:border-blue-300 transition-all text-center group"
         >
-          <Calendar className="w-8 h-8 mb-3" />
-          <h3 className="font-semibold text-lg">File Leave Request</h3>
-          <p className="text-blue-100 text-sm mt-1">
-            Submit a new leave application
-          </p>
+          <div className="w-12 h-12 bg-blue-100 rounded-xl flex items-center justify-center mx-auto mb-3 group-hover:bg-blue-200 transition-colors">
+            <Calendar className="w-6 h-6 text-blue-600" />
+          </div>
+          <p className="font-medium text-gray-900 text-sm">File Leave</p>
         </Link>
 
         <Link
           href="/dashboard/documents?action=new"
-          className="bg-gradient-to-br from-purple-500 to-purple-600 rounded-xl p-6 text-white hover:from-purple-600 hover:to-purple-700 transition-all card-hover"
+          className="bg-white rounded-xl p-4 shadow-sm border hover:shadow-md hover:border-purple-300 transition-all text-center group"
         >
-          <FileText className="w-8 h-8 mb-3" />
-          <h3 className="font-semibold text-lg">Request Document</h3>
-          <p className="text-purple-100 text-sm mt-1">
-            Request COE, ITR, or other documents
-          </p>
+          <div className="w-12 h-12 bg-purple-100 rounded-xl flex items-center justify-center mx-auto mb-3 group-hover:bg-purple-200 transition-colors">
+            <FileText className="w-6 h-6 text-purple-600" />
+          </div>
+          <p className="font-medium text-gray-900 text-sm">Request Doc</p>
+        </Link>
+
+        <Link
+          href="/dashboard/payslips"
+          className="bg-white rounded-xl p-4 shadow-sm border hover:shadow-md hover:border-green-300 transition-all text-center group"
+        >
+          <div className="w-12 h-12 bg-green-100 rounded-xl flex items-center justify-center mx-auto mb-3 group-hover:bg-green-200 transition-colors">
+            <Wallet className="w-6 h-6 text-green-600" />
+          </div>
+          <p className="font-medium text-gray-900 text-sm">View Payslips</p>
+        </Link>
+
+        <Link
+          href="/dashboard/benefits"
+          className="bg-white rounded-xl p-4 shadow-sm border hover:shadow-md hover:border-cyan-300 transition-all text-center group"
+        >
+          <div className="w-12 h-12 bg-cyan-100 rounded-xl flex items-center justify-center mx-auto mb-3 group-hover:bg-cyan-200 transition-colors">
+            <Shield className="w-6 h-6 text-cyan-600" />
+          </div>
+          <p className="font-medium text-gray-900 text-sm">My Benefits</p>
+        </Link>
+
+        <Link
+          href="/dashboard/loans"
+          className="bg-white rounded-xl p-4 shadow-sm border hover:shadow-md hover:border-orange-300 transition-all text-center group"
+        >
+          <div className="w-12 h-12 bg-orange-100 rounded-xl flex items-center justify-center mx-auto mb-3 group-hover:bg-orange-200 transition-colors">
+            <Landmark className="w-6 h-6 text-orange-600" />
+          </div>
+          <p className="font-medium text-gray-900 text-sm">My Loans</p>
         </Link>
 
         <Link
           href="/dashboard/profile"
-          className="bg-gradient-to-br from-green-500 to-green-600 rounded-xl p-6 text-white hover:from-green-600 hover:to-green-700 transition-all card-hover"
+          className="bg-white rounded-xl p-4 shadow-sm border hover:shadow-md hover:border-gray-300 transition-all text-center group"
         >
-          <CheckCircle className="w-8 h-8 mb-3" />
-          <h3 className="font-semibold text-lg">Update Profile</h3>
-          <p className="text-green-100 text-sm mt-1">
-            Keep your information up to date
-          </p>
+          <div className="w-12 h-12 bg-gray-100 rounded-xl flex items-center justify-center mx-auto mb-3 group-hover:bg-gray-200 transition-colors">
+            <User className="w-6 h-6 text-gray-600" />
+          </div>
+          <p className="font-medium text-gray-900 text-sm">My Profile</p>
         </Link>
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
         {/* Recent Leave Requests */}
         <div className="bg-white rounded-xl shadow-sm border">
-          <div className="flex items-center justify-between p-6 border-b">
+          <div className="flex items-center justify-between p-5 border-b">
             <h2 className="font-semibold text-gray-900">Recent Leave Requests</h2>
             <Link
               href="/dashboard/leave"
@@ -197,7 +345,7 @@ export default function DashboardPage() {
           </div>
           <div className="divide-y">
             {data?.recentLeave && data.recentLeave.length > 0 ? (
-              data.recentLeave.slice(0, 5).map((leave) => (
+              data.recentLeave.slice(0, 4).map((leave) => (
                 <div key={leave.id} className="p-4 hover:bg-gray-50">
                   <div className="flex items-center justify-between">
                     <div>
@@ -220,6 +368,12 @@ export default function DashboardPage() {
               <div className="p-8 text-center text-gray-500">
                 <Calendar className="w-12 h-12 mx-auto mb-3 text-gray-300" />
                 <p>No leave requests yet</p>
+                <Link 
+                  href="/dashboard/leave?action=new"
+                  className="text-mscorp-blue text-sm hover:underline mt-2 inline-block"
+                >
+                  File your first leave request
+                </Link>
               </div>
             )}
           </div>
@@ -227,8 +381,8 @@ export default function DashboardPage() {
 
         {/* Announcements */}
         <div className="bg-white rounded-xl shadow-sm border">
-          <div className="flex items-center justify-between p-6 border-b">
-            <h2 className="font-semibold text-gray-900">Announcements</h2>
+          <div className="flex items-center justify-between p-5 border-b">
+            <h2 className="font-semibold text-gray-900">Company Announcements</h2>
             <Link
               href="/dashboard/announcements"
               className="text-sm text-mscorp-blue hover:text-mscorp-dark flex items-center"
@@ -238,11 +392,11 @@ export default function DashboardPage() {
           </div>
           <div className="divide-y">
             {data?.announcements && data.announcements.length > 0 ? (
-              data.announcements.slice(0, 5).map((announcement) => (
+              data.announcements.slice(0, 4).map((announcement) => (
                 <div key={announcement.id} className="p-4 hover:bg-gray-50">
                   <div className="flex items-start gap-3">
                     <div
-                      className={`w-2 h-2 rounded-full mt-2 ${
+                      className={`w-2 h-2 rounded-full mt-2 flex-shrink-0 ${
                         announcement.priority === 'High'
                           ? 'bg-red-500'
                           : announcement.priority === 'Medium'
