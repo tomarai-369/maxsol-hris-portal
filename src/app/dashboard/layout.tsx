@@ -16,6 +16,10 @@ import {
   Upload,
   Settings,
   TrendingUp,
+  Clock,
+  Wallet,
+  Shield,
+  Landmark,
 } from 'lucide-react';
 
 interface UserInfo {
@@ -30,9 +34,13 @@ interface UserInfo {
 
 const navigation = [
   { name: 'Dashboard', href: '/dashboard', icon: LayoutDashboard },
-  { name: 'My Profile', href: '/dashboard/profile', icon: User },
+  { name: 'Time & Attendance', href: '/dashboard/dtr', icon: Clock },
   { name: 'Leave Requests', href: '/dashboard/leave', icon: Calendar },
+  { name: 'Payslips', href: '/dashboard/payslips', icon: Wallet },
+  { name: 'Benefits', href: '/dashboard/benefits', icon: Shield },
+  { name: 'Loans', href: '/dashboard/loans', icon: Landmark },
   { name: 'Document Requests', href: '/dashboard/documents', icon: FileText },
+  { name: 'My Profile', href: '/dashboard/profile', icon: User },
   { name: 'Announcements', href: '/dashboard/announcements', icon: Bell },
 ];
 
