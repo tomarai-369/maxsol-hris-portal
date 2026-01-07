@@ -1,10 +1,9 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { getEmployeeByEmail, setVerificationToken, updateEmployeePassword } from '@/lib/kintone';
-import { hashPassword, generateVerificationToken, generateToken } from '@/lib/auth';
-import { sendActivationEmail } from '@/lib/email';
+import { getEmployeeByEmail, updateEmployeePassword } from '@/lib/kintone';
+import { hashPassword, generateToken } from '@/lib/auth';
 import { cookies } from 'next/headers';
 
-// Request activation link
+// Step 1: Check if email exists and return employee info
 export async function POST(request: NextRequest) {
   try {
     const { email } = await request.json();
@@ -20,38 +19,36 @@ export async function POST(request: NextRequest) {
 
     if (!employee) {
       return NextResponse.json(
-        { error: 'Email not found in our records. Please contact HR.' },
+        { error: 'Email not found in our records. Please contact HR to register.' },
         { status: 404 }
       );
     }
 
-    if (employee.isVerified && employee.passwordHash) {
+    // If already has password, redirect to login
+    if (employee.passwordHash) {
       return NextResponse.json(
-        { error: 'Account is already activated. Please login.' },
+        { 
+          error: 'Account already activated. Please login with your password.',
+          alreadyActivated: true 
+        },
         { status: 400 }
       );
     }
 
-    // Generate and save verification token
-    const token = generateVerificationToken();
-    await setVerificationToken(employee.id, token);
-
-    // Send activation email
-    const emailSent = await sendActivationEmail(employee.email, employee.firstName, token);
-
-    if (!emailSent) {
-      return NextResponse.json(
-        { error: 'Failed to send activation email. Please try again.' },
-        { status: 500 }
-      );
-    }
-
+    // Return employee info for password setup
     return NextResponse.json({
       success: true,
-      message: 'Activation link sent to your email',
+      employee: {
+        firstName: employee.firstName,
+        lastName: employee.lastName,
+        email: employee.email,
+        department: employee.department,
+        position: employee.position,
+        employeeId: employee.employeeId,
+      },
     });
   } catch (error) {
-    console.error('Activation request error:', error);
+    console.error('Activation check error:', error);
     return NextResponse.json(
       { error: 'An error occurred. Please try again.' },
       { status: 500 }
@@ -59,14 +56,14 @@ export async function POST(request: NextRequest) {
   }
 }
 
-// Complete activation (set password)
+// Step 2: Set password and activate account
 export async function PUT(request: NextRequest) {
   try {
-    const { email, token, password } = await request.json();
+    const { email, password } = await request.json();
 
-    if (!email || !token || !password) {
+    if (!email || !password) {
       return NextResponse.json(
-        { error: 'Missing required fields' },
+        { error: 'Email and password are required' },
         { status: 400 }
       );
     }
@@ -82,14 +79,15 @@ export async function PUT(request: NextRequest) {
 
     if (!employee) {
       return NextResponse.json(
-        { error: 'Invalid activation link' },
-        { status: 400 }
+        { error: 'Employee not found' },
+        { status: 404 }
       );
     }
 
-    if (employee.verificationToken !== token) {
+    // Check if already has password
+    if (employee.passwordHash) {
       return NextResponse.json(
-        { error: 'Invalid or expired activation link' },
+        { error: 'Account already activated. Please login.' },
         { status: 400 }
       );
     }
@@ -111,16 +109,21 @@ export async function PUT(request: NextRequest) {
       httpOnly: true,
       secure: process.env.NODE_ENV === 'production',
       sameSite: 'lax',
-      maxAge: 60 * 60 * 24 * 7,
+      maxAge: 60 * 60 * 24 * 7, // 7 days
       path: '/',
     });
 
     return NextResponse.json({
       success: true,
       message: 'Account activated successfully',
+      user: {
+        firstName: employee.firstName,
+        lastName: employee.lastName,
+        email: employee.email,
+      },
     });
   } catch (error) {
-    console.error('Activation completion error:', error);
+    console.error('Activation error:', error);
     return NextResponse.json(
       { error: 'An error occurred. Please try again.' },
       { status: 500 }
