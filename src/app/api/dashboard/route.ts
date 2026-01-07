@@ -18,11 +18,14 @@ export async function GET() {
       );
     }
 
+    // Use employeeId (string like "EMP0001") for queries
+    const employeeId = user.employeeId;
+
     // Fetch all data in parallel
     const [leaveRequests, leaveBalances, documentRequests, announcements] = await Promise.all([
-      getEmployeeLeaveRequests(user.id),
-      getEmployeeLeaveBalances(user.id),
-      getEmployeeDocumentRequests(user.id),
+      getEmployeeLeaveRequests(employeeId),
+      getEmployeeLeaveBalances(employeeId),
+      getEmployeeDocumentRequests(employeeId),
       getActiveAnnouncements(),
     ]);
 
