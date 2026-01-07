@@ -114,11 +114,13 @@ export default function DashboardLayout({
           {/* Logo */}
           <div className="flex items-center justify-between p-4 border-b">
             <div className="flex items-center">
-              <div className="w-10 h-10 bg-mscorp-blue rounded-lg flex items-center justify-center">
-                <span className="text-white font-bold">MS</span>
-              </div>
+              <img 
+                src="https://mscorp.com.ph/MSC-logo-png-file.png" 
+                alt="MS Corp" 
+                className="w-10 h-10 object-contain"
+              />
               <div className="ml-3">
-                <p className="font-semibold text-gray-900 text-sm">MS Corp HR</p>
+                <p className="font-semibold text-gray-900 text-sm">MS Corp HRIS</p>
                 <p className="text-xs text-gray-500">Employee Portal</p>
               </div>
             </div>
