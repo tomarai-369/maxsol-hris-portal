@@ -632,3 +632,4 @@ export async function getEmployeeLoans(employeeId: string): Promise<Loan[]> {
     status: r.status?.value || '',
   }));
 }
+// Build trigger: Thu Jan  8 01:35:50 UTC 2026
