@@ -1,40 +1,42 @@
 import { NextResponse } from 'next/server';
-import { getEmployeeByEmail } from '@/lib/kintone';
+
+const KINTONE_DOMAIN = process.env.KINTONE_DOMAIN || 'ms-corp.cybozu.com';
+const KINTONE_USER = process.env.KINTONE_USER || '';
+const KINTONE_PASS = process.env.KINTONE_PASS || '';
 
 export async function GET() {
-  const authMethod = process.env.KINTONE_PASS ? 'password' : 'api_token';
-  const hasUser = !!process.env.KINTONE_USER;
-  const hasPass = !!process.env.KINTONE_PASS;
+  const authHeader = Buffer.from(`${KINTONE_USER}:${KINTONE_PASS}`).toString('base64');
   
   try {
-    // Test a simple query
-    const employee = await getEmployeeByEmail('admin@mscorp.com.ph');
+    const url = `https://${KINTONE_DOMAIN}/k/v1/records.json?app=303&query=email%20%3D%20%22admin%40mscorp.com.ph%22`;
+    
+    const response = await fetch(url, {
+      method: 'GET',
+      headers: {
+        'X-Cybozu-Authorization': authHeader,
+        'Content-Type': 'application/json',
+      },
+      cache: 'no-store'
+    });
+    
+    const data = await response.json();
     
     return NextResponse.json({
-      status: 'success',
-      authMethod,
-      envVars: {
-        KINTONE_USER: hasUser ? 'SET' : 'NOT SET',
-        KINTONE_PASS: hasPass ? 'SET' : 'NOT SET',
-        KINTONE_DOMAIN: process.env.KINTONE_DOMAIN || 'default'
-      },
-      employee: employee ? {
-        id: employee.id,
-        email: employee.email,
-        name: `${employee.firstName} ${employee.lastName}`,
-        verified: employee.isVerified
-      } : null
+      status: response.ok ? 'success' : 'error',
+      httpStatus: response.status,
+      authHeader: authHeader.substring(0, 20) + '...',
+      user: KINTONE_USER,
+      passLength: KINTONE_PASS.length,
+      url,
+      response: data.records ? { recordCount: data.records.length } : data
     });
   } catch (error: any) {
     return NextResponse.json({
-      status: 'error',
-      authMethod,
-      envVars: {
-        KINTONE_USER: hasUser ? 'SET' : 'NOT SET',
-        KINTONE_PASS: hasPass ? 'SET' : 'NOT SET',
-        KINTONE_DOMAIN: process.env.KINTONE_DOMAIN || 'default'
-      },
-      error: error.message
+      status: 'exception',
+      error: error.message,
+      authHeader: authHeader.substring(0, 20) + '...',
+      user: KINTONE_USER,
+      passLength: KINTONE_PASS.length
     });
   }
 }
