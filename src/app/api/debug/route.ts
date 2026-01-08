@@ -1,64 +1,86 @@
 import { NextResponse } from 'next/server';
 
-export async function GET(request: Request) {
+export async function GET() {
   const KINTONE_DOMAIN = process.env.KINTONE_DOMAIN || 'ms-corp.cybozu.com';
   const KINTONE_API_TOKEN = process.env.KINTONE_API_TOKEN || '';
   
-  // Get all env vars related to Kintone
-  const envVars: Record<string, string> = {};
-  for (const [key, value] of Object.entries(process.env)) {
-    if (key.includes('KINTONE') || key.includes('JWT')) {
-      envVars[key] = typeof value === 'string' ? 
-        (value.length > 50 ? value.substring(0, 50) + '...' : value) : 
-        'undefined';
-    }
-  }
-
   const url = `https://${KINTONE_DOMAIN}/k/v1/records.json?app=303`;
-  
-  // Try with explicit headers
-  const headers = new Headers();
-  headers.set('X-Cybozu-API-Token', KINTONE_API_TOKEN);
-  headers.set('Content-Type', 'application/json');
-  
-  let result: any = {
-    envVars,
-    tokenUsed: KINTONE_API_TOKEN,
-    tokenLength: KINTONE_API_TOKEN.length,
-    url,
-    headersSet: {
-      'X-Cybozu-API-Token': KINTONE_API_TOKEN,
-      'Content-Type': 'application/json'
-    }
-  };
+  const results: any = {};
 
+  // Test 1: Basic (current approach)
   try {
-    const response = await fetch(url, {
+    const resp = await fetch(url, {
       method: 'GET',
-      headers: headers,
+      headers: {
+        'X-Cybozu-API-Token': KINTONE_API_TOKEN,
+        'Content-Type': 'application/json',
+      },
     });
-    
-    const responseHeaders: Record<string, string> = {};
-    response.headers.forEach((value, key) => {
-      responseHeaders[key] = value;
-    });
-    
-    const text = await response.text();
-    
-    result.response = {
-      status: response.status,
-      statusText: response.statusText,
-      headers: responseHeaders,
-      body: text
-    };
-  } catch (error: any) {
-    result.error = {
-      message: error.message,
-      stack: error.stack?.substring(0, 300)
-    };
-  }
+    const data = await resp.json();
+    results.test1_basic = { status: resp.status, ok: resp.ok, records: data.records?.length, error: data.code };
+  } catch (e: any) { results.test1_basic = { error: e.message }; }
 
-  return NextResponse.json(result, { 
-    headers: { 'Content-Type': 'application/json' }
-  });
+  // Test 2: With Origin header
+  try {
+    const resp = await fetch(url, {
+      method: 'GET',
+      headers: {
+        'X-Cybozu-API-Token': KINTONE_API_TOKEN,
+        'Content-Type': 'application/json',
+        'Origin': `https://${KINTONE_DOMAIN}`,
+      },
+    });
+    const data = await resp.json();
+    results.test2_withOrigin = { status: resp.status, ok: resp.ok, records: data.records?.length, error: data.code };
+  } catch (e: any) { results.test2_withOrigin = { error: e.message }; }
+
+  // Test 3: With User-Agent
+  try {
+    const resp = await fetch(url, {
+      method: 'GET',
+      headers: {
+        'X-Cybozu-API-Token': KINTONE_API_TOKEN,
+        'Content-Type': 'application/json',
+        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
+      },
+    });
+    const data = await resp.json();
+    results.test3_withUserAgent = { status: resp.status, ok: resp.ok, records: data.records?.length, error: data.code };
+  } catch (e: any) { results.test3_withUserAgent = { error: e.message }; }
+
+  // Test 4: Minimal headers
+  try {
+    const resp = await fetch(url, {
+      method: 'GET',
+      headers: {
+        'X-Cybozu-API-Token': KINTONE_API_TOKEN,
+      },
+    });
+    const data = await resp.json();
+    results.test4_minimal = { status: resp.status, ok: resp.ok, records: data.records?.length, error: data.code };
+  } catch (e: any) { results.test4_minimal = { error: e.message }; }
+
+  // Test 5: Using node's https directly
+  try {
+    const https = require('https');
+    const data = await new Promise((resolve, reject) => {
+      const req = https.request(url, {
+        method: 'GET',
+        headers: {
+          'X-Cybozu-API-Token': KINTONE_API_TOKEN,
+          'Content-Type': 'application/json',
+        }
+      }, (res: any) => {
+        let body = '';
+        res.on('data', (chunk: any) => body += chunk);
+        res.on('end', () => resolve({ status: res.statusCode, body }));
+      });
+      req.on('error', reject);
+      req.end();
+    }) as any;
+    const json = JSON.parse(data.body);
+    results.test5_https = { status: data.status, records: json.records?.length, error: json.code };
+  } catch (e: any) { results.test5_https = { error: e.message }; }
+
+  return NextResponse.json(results);
 }
