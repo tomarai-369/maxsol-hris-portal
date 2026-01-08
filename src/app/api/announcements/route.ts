@@ -10,9 +10,7 @@ export async function GET() {
       return NextResponse.json({ error: 'Not authenticated' }, { status: 401 });
     }
 
-    console.log('Fetching announcements for user:', user.employeeId);
     const announcements = await getActiveAnnouncements();
-    console.log('Got announcements:', announcements.length);
 
     return NextResponse.json({
       announcements: announcements.map((a) => ({
@@ -25,7 +23,7 @@ export async function GET() {
       })),
     });
   } catch (error: any) {
-    console.error('Get announcements error:', error.message, error.stack);
+    console.error('Get announcements error:', error.message);
     return NextResponse.json(
       { error: 'Failed to fetch announcements', details: error.message },
       { status: 500 }
