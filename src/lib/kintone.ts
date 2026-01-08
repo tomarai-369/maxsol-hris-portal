@@ -578,6 +578,20 @@ export interface Benefits {
   tinNumber: string;
   hmoProvider: string;
   hmoPlan: string;
+  hmoCardNumber: string;
+  hmoDependents: number;
+  bankName: string;
+  bankAccount: string;
+}
+
+// OLD Benefits interface below - REMOVE
+  employeeId: string;
+  sssNumber: string;
+  philhealthNumber: string;
+  pagibigNumber: string;
+  tinNumber: string;
+  hmoProvider: string;
+  hmoPlan: string;
 }
 
 export async function getEmployeeBenefits(employeeId: string): Promise<Benefits | null> {
