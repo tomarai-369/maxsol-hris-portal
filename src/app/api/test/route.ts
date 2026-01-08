@@ -1,42 +1,32 @@
 import { NextResponse } from 'next/server';
-import { getEmployeeByEmail } from '@/lib/kintone';
 
 export async function GET() {
   try {
-    // Check environment variables
-    const envCheck = {
-      KINTONE_DOMAIN: process.env.KINTONE_DOMAIN || 'NOT SET',
-      KINTONE_TOKEN_EMPLOYEES: process.env.KINTONE_TOKEN_EMPLOYEES ? 'SET' : 'NOT SET',
-      KINTONE_API_TOKEN: process.env.KINTONE_API_TOKEN ? 'SET (length: ' + process.env.KINTONE_API_TOKEN.length + ')' : 'NOT SET',
-    };
-
-    // Try to fetch the admin user
-    let employeeResult = null;
-    let error = null;
+    const KINTONE_DOMAIN = process.env.KINTONE_DOMAIN || 'ms-corp.cybozu.com';
+    const TOKEN = process.env.KINTONE_TOKEN_EMPLOYEES || '';
     
-    try {
-      const employee = await getEmployeeByEmail('admin@mscorp.com.ph');
-      if (employee) {
-        employeeResult = {
-          found: true,
-          id: employee.id,
-          employeeId: employee.employeeId,
-          email: employee.email,
-          isVerified: employee.isVerified,
-          hasPasswordHash: !!employee.passwordHash,
-        };
-      } else {
-        employeeResult = { found: false };
-      }
-    } catch (e) {
-      error = e instanceof Error ? e.message : String(e);
-    }
-
+    // Try direct API call
+    const url = `https://${KINTONE_DOMAIN}/k/v1/records.json?app=303&query=email%20%3D%20%22admin%40mscorp.com.ph%22`;
+    
+    const response = await fetch(url, {
+      method: 'GET',
+      headers: {
+        'X-Cybozu-API-Token': TOKEN,
+        'Content-Type': 'application/json',
+      },
+      cache: 'no-store',
+    });
+    
+    const data = await response.json();
+    
     return NextResponse.json({
-      status: 'ok',
-      env: envCheck,
-      employeeResult,
-      error,
+      status: response.ok ? 'ok' : 'error',
+      httpStatus: response.status,
+      domain: KINTONE_DOMAIN,
+      tokenLength: TOKEN.length,
+      tokenPreview: TOKEN.substring(0, 10) + '...',
+      url: url,
+      response: data,
     });
   } catch (error) {
     return NextResponse.json({
