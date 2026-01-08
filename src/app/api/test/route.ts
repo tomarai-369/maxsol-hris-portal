@@ -9,7 +9,7 @@ export async function GET() {
   const authHeader = Buffer.from(credentials).toString('base64');
   
   try {
-    // Simpler query - just get records without query param
+    // Try with additional headers
     const url = `https://${KINTONE_DOMAIN}/k/v1/records.json?app=303`;
     
     const response = await fetch(url, {
@@ -17,31 +17,37 @@ export async function GET() {
       headers: {
         'X-Cybozu-Authorization': authHeader,
         'Content-Type': 'application/json',
+        'Accept': 'application/json',
+        'User-Agent': 'HRIS-Portal/1.0',
       },
-      cache: 'no-store'
+      cache: 'no-store',
+      // @ts-ignore - Next.js specific
+      next: { revalidate: 0 }
     });
     
-    const data = await response.json();
+    const text = await response.text();
+    let data;
+    try {
+      data = JSON.parse(text);
+    } catch {
+      data = { rawText: text.substring(0, 500) };
+    }
     
     return NextResponse.json({
       status: response.ok ? 'success' : 'error',
       httpStatus: response.status,
-      // Show full auth header for debugging
-      authHeaderFull: authHeader,
-      authHeaderExpected: 'QWRtaW5pc3RyYXRvcjpFZGFtYW1lITIzNDU=',
+      statusText: response.statusText,
+      headers: Object.fromEntries(response.headers.entries()),
       authMatch: authHeader === 'QWRtaW5pc3RyYXRvcjpFZGFtYW1lITIzNDU=',
-      user: KINTONE_USER,
-      pass: KINTONE_PASS ? `${KINTONE_PASS.substring(0,3)}...${KINTONE_PASS.length}chars` : 'EMPTY',
-      url,
       recordCount: data.records?.length || 0,
-      error: data.message || data.code || null
+      error: data.message || data.code || null,
+      data: data.records ? 'has records' : data
     });
   } catch (error: any) {
     return NextResponse.json({
       status: 'exception',
       error: error.message,
-      user: KINTONE_USER,
-      pass: KINTONE_PASS ? `${KINTONE_PASS.substring(0,3)}...` : 'EMPTY'
+      stack: error.stack?.substring(0, 300)
     });
   }
 }
