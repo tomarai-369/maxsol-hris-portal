@@ -1,46 +1,19 @@
 // Kintone API wrapper for HRIS Portal
-// FIXED: Uses single token per request to avoid 10-token limit
+// Uses Password Authentication (more reliable than API tokens)
 
 const KINTONE_DOMAIN = process.env.KINTONE_DOMAIN || 'ms-corp.cybozu.com';
+const KINTONE_USER = process.env.KINTONE_USER || 'Administrator';
+const KINTONE_PASS = process.env.KINTONE_PASS || '';
 
-// Parse tokens - use individual vars if available, otherwise split combined
-const TOKENS: Record<number, string> = {};
-const COMBINED = (process.env.KINTONE_API_TOKEN || '').split(',').map(t => t.trim()).filter(Boolean);
-
-// Map app IDs to token indices
-const APP_TOKEN_MAP: Record<number, number> = {
-  303: 0, 304: 1, 305: 2, 306: 3, 307: 4, 308: 5, 309: 6, 310: 7, 311: 8, 312: 9
-};
-
-// Get the appropriate single token for an app
-function getToken(appId: number): string {
-  // Try individual env var first
-  const envVarNames: Record<number, string> = {
-    303: 'KINTONE_TOKEN_EMPLOYEES',
-    304: 'KINTONE_TOKEN_LEAVE_REQUESTS', 
-    305: 'KINTONE_TOKEN_DOCUMENT_REQUESTS',
-    306: 'KINTONE_TOKEN_ANNOUNCEMENTS',
-    307: 'KINTONE_TOKEN_LEAVE_BALANCES',
-    308: 'KINTONE_TOKEN_DTR',
-    309: 'KINTONE_TOKEN_PAYROLL',
-    310: 'KINTONE_TOKEN_BENEFITS',
-    311: 'KINTONE_TOKEN_LOANS',
-    312: 'KINTONE_TOKEN_SCHEDULES'
-  };
-  
-  const envVar = envVarNames[appId];
-  if (envVar && process.env[envVar]) {
-    return process.env[envVar] as string;
+// Create base64 auth header
+function getAuthHeader(): string {
+  const credentials = `${KINTONE_USER}:${KINTONE_PASS}`;
+  // Use Buffer for Node.js environment
+  if (typeof Buffer !== 'undefined') {
+    return Buffer.from(credentials).toString('base64');
   }
-  
-  // Fallback to combined tokens by index
-  const idx = APP_TOKEN_MAP[appId];
-  if (idx !== undefined && COMBINED[idx]) {
-    return COMBINED[idx];
-  }
-  
-  // Last resort: first token
-  return COMBINED[0] || '';
+  // Fallback for browser (shouldn't be used in API routes)
+  return btoa(credentials);
 }
 
 export const KINTONE_APPS = {
@@ -64,28 +37,16 @@ interface KintoneResponse {
   totalCount?: string;
 }
 
-// Generic Kintone API call - uses SINGLE app-specific token
+// Generic Kintone API call using Password Auth
 async function kintoneRequest(
   endpoint: string,
   method: string = 'GET',
-  body?: any,
-  appId?: number
+  body?: any
 ): Promise<any> {
   const url = `https://${KINTONE_DOMAIN}/k/v1/${endpoint}`;
   
-  // Determine which app we're accessing
-  let targetApp = appId;
-  if (!targetApp && body?.app) targetApp = body.app;
-  if (!targetApp) {
-    const match = endpoint.match(/app=(\d+)/);
-    if (match) targetApp = parseInt(match[1]);
-  }
-  
-  // Get SINGLE token for this app (not all tokens!)
-  const token = targetApp ? getToken(targetApp) : COMBINED[0];
-  
   const headers: Record<string, string> = {
-    'X-Cybozu-API-Token': token,  // Single token only!
+    'X-Cybozu-Authorization': getAuthHeader(),
     'Content-Type': 'application/json',
   };
 
@@ -122,7 +83,7 @@ export async function getRecords(
   if (fields) params.append('fields', JSON.stringify(fields));
   if (totalCount) params.append('totalCount', 'true');
 
-  return kintoneRequest(`records.json?${params.toString()}`, 'GET', undefined, appId);
+  return kintoneRequest(`records.json?${params.toString()}`, 'GET');
 }
 
 // Get single record
@@ -131,13 +92,13 @@ export async function getRecord(appId: number, recordId: number): Promise<any> {
     app: appId.toString(),
     id: recordId.toString(),
   });
-  const response = await kintoneRequest(`record.json?${params.toString()}`, 'GET', undefined, appId);
+  const response = await kintoneRequest(`record.json?${params.toString()}`, 'GET');
   return response.record;
 }
 
 // Add record
 export async function addRecord(appId: number, record: any): Promise<{ id: string; revision: string }> {
-  return kintoneRequest('record.json', 'POST', { app: appId, record }, appId);
+  return kintoneRequest('record.json', 'POST', { app: appId, record });
 }
 
 // Update record
@@ -146,7 +107,7 @@ export async function updateRecord(
   recordId: number,
   record: any
 ): Promise<{ revision: string }> {
-  return kintoneRequest('record.json', 'PUT', { app: appId, id: recordId, record }, appId);
+  return kintoneRequest('record.json', 'PUT', { app: appId, id: recordId, record });
 }
 
 // =====================
