@@ -1,37 +1,30 @@
 import { NextResponse } from 'next/server';
+import { getActiveAnnouncements, getRecords, KINTONE_APPS } from '@/lib/kintone';
 
 export async function GET() {
-  const KINTONE_DOMAIN = process.env.KINTONE_DOMAIN || 'ms-corp.cybozu.com';
-  const TOKEN_ANN = process.env.KINTONE_TOKEN_ANNOUNCEMENTS || '';
+  const results: any = {};
   
-  const results: any = {
-    tokens: {
-      announcements: TOKEN_ANN ? TOKEN_ANN.substring(0, 10) + '...' : 'EMPTY',
-      annLength: TOKEN_ANN.length
-    }
-  };
-  
-  // Test announcements
-  const today = new Date().toISOString().split('T')[0];
-  const query = `is_active in ("Yes") and publish_date <= "${today}" order by priority desc limit 20`;
-  const url = `https://${KINTONE_DOMAIN}/k/v1/records.json?app=306&query=${encodeURIComponent(query)}`;
-  
+  // Test 1: Direct getRecords call
   try {
-    const response = await fetch(url, {
-      method: 'GET',
-      headers: { 'X-Cybozu-API-Token': TOKEN_ANN },
-    });
-    const data = await response.json();
-    results.announcements = {
-      status: response.status,
-      ok: response.ok,
-      recordCount: data.records?.length,
-      error: data.code,
-      message: data.message
-    };
+    const data = await getRecords(KINTONE_APPS.ANNOUNCEMENTS, '');
+    results.directCall = { success: true, count: data.records?.length || 0 };
   } catch (e: any) {
-    results.announcements = { error: e.message };
+    results.directCall = { success: false, error: e.message };
   }
   
+  // Test 2: getActiveAnnouncements function
+  try {
+    const announcements = await getActiveAnnouncements();
+    results.getActiveAnnouncements = { success: true, count: announcements.length };
+  } catch (e: any) {
+    results.getActiveAnnouncements = { success: false, error: e.message };
+  }
+  
+  // Test 3: Check env var for token
+  results.tokenCheck = {
+    hasToken: !!process.env.KINTONE_TOKEN_ANNOUNCEMENTS,
+    tokenPreview: process.env.KINTONE_TOKEN_ANNOUNCEMENTS?.substring(0, 10) + '...'
+  };
+
   return NextResponse.json(results);
 }
