@@ -16,42 +16,54 @@ export async function GET() {
         approvedDate: r.approvedDate, remarks: r.remarks, createdAt: r.createdAt,
       })),
     });
-  } catch (error) {
-    console.error('Get leave requests error:', error);
-    return NextResponse.json({ error: 'Failed to fetch leave requests' }, { status: 500 });
+  } catch (error: any) {
+    return NextResponse.json({ error: 'Failed to fetch leave requests', details: error.message }, { status: 500 });
   }
 }
 
 export async function POST(request: NextRequest) {
+  // Step 1: Get user
+  let user;
   try {
-    const user = await getCurrentUser();
-    if (!user) {
-      return NextResponse.json({ error: 'Not authenticated' }, { status: 401 });
-    }
+    user = await getCurrentUser();
+  } catch (e: any) {
+    return NextResponse.json({ error: 'Auth error', step: 1, details: e.message }, { status: 500 });
+  }
+  
+  if (!user) {
+    return NextResponse.json({ error: 'Not authenticated', step: 1 }, { status: 401 });
+  }
 
-    const body = await request.json();
-    const { leaveType, startDate, endDate, totalDays, reason } = body;
+  // Step 2: Parse body
+  let body;
+  try {
+    body = await request.json();
+  } catch (e: any) {
+    return NextResponse.json({ error: 'JSON parse error', step: 2, details: e.message }, { status: 400 });
+  }
 
-    if (!leaveType || !startDate || !endDate || !reason) {
-      return NextResponse.json({ error: 'Missing required fields', received: body }, { status: 400 });
-    }
+  const { leaveType, startDate, endDate, totalDays, reason } = body;
 
-    const employeeName = `${user.lastName}, ${user.firstName}`;
-    
-    try {
-      const result = await createLeaveRequest(user.employeeId, employeeName, {
-        leaveType, startDate, endDate, totalDays: totalDays || 1, reason,
-      });
-      return NextResponse.json({ success: true, id: result.id, message: 'Leave request submitted' });
-    } catch (kintoneError: any) {
-      return NextResponse.json({ 
-        error: 'Kintone error', 
-        details: kintoneError.message,
-        user: { employeeId: user.employeeId, name: employeeName },
-        data: { leaveType, startDate, endDate, totalDays, reason }
-      }, { status: 500 });
-    }
-  } catch (error: any) {
-    return NextResponse.json({ error: 'Failed to submit request', details: error.message }, { status: 500 });
+  if (!leaveType || !startDate || !endDate || !reason) {
+    return NextResponse.json({ error: 'Missing required fields', step: 3, received: body }, { status: 400 });
+  }
+
+  // Step 3: Create request
+  const employeeName = `${user.lastName}, ${user.firstName}`;
+  
+  try {
+    const result = await createLeaveRequest(user.employeeId, employeeName, {
+      leaveType, startDate, endDate, totalDays: totalDays || 1, reason,
+    });
+    return NextResponse.json({ success: true, id: result.id, message: 'Leave request submitted' });
+  } catch (e: any) {
+    return NextResponse.json({ 
+      error: 'Kintone create error', 
+      step: 4,
+      details: e.message,
+      stack: e.stack?.substring(0, 300),
+      employeeId: user.employeeId,
+      data: { leaveType, startDate, endDate, totalDays, reason }
+    }, { status: 500 });
   }
 }
