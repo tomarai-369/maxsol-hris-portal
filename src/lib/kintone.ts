@@ -1,5 +1,5 @@
 // Kintone API wrapper for HRIS Portal
-// Updated: Force rebuild with individual tokens
+// Version: 3.0 - With detailed logging
 
 const KINTONE_DOMAIN = process.env.KINTONE_DOMAIN || 'ms-corp.cybozu.com';
 
@@ -20,6 +20,13 @@ const API_TOKENS: Record<number, string> = {
 // Fallback: parse comma-separated tokens (legacy support)
 const COMBINED_TOKENS = (process.env.KINTONE_API_TOKEN || '').split(',').filter(t => t.trim());
 
+// Log token availability on startup
+console.log('[Kintone] Token check:', {
+  employees: API_TOKENS[303] ? 'SET' : 'MISSING',
+  combined: COMBINED_TOKENS.length > 0 ? `${COMBINED_TOKENS.length} tokens` : 'NONE',
+  domain: KINTONE_DOMAIN
+});
+
 // Get token for specific app
 function getTokenForApp(appId: number): string {
   // First try individual token
@@ -38,7 +45,7 @@ function getTokenForApp(appId: number): string {
     return COMBINED_TOKENS[index];
   }
   
-  // Last resort: use first token
+  // Last resort: use first combined token
   return COMBINED_TOKENS[0] || '';
 }
 
@@ -64,7 +71,7 @@ interface KintoneResponse {
   totalCount?: string;
 }
 
-// Generic Kintone API call - uses app-specific token
+// Generic Kintone API call
 async function kintoneRequest(
   endpoint: string,
   method: string = 'GET',
@@ -85,12 +92,15 @@ async function kintoneRequest(
     }
   }
   
-  // Default to Employees app if not specified
-  const token = targetAppId ? getTokenForApp(targetAppId) : getTokenForApp(303);
+  // Default to Employees app
+  targetAppId = targetAppId || 303;
+  
+  const token = getTokenForApp(targetAppId);
+  
+  console.log(`[Kintone] ${method} ${endpoint.substring(0, 50)}... app=${targetAppId} token=${token ? 'SET' : 'MISSING'}`);
   
   if (!token) {
-    console.error('No API token available for app:', targetAppId);
-    throw new Error('Missing Kintone API token');
+    throw new Error(`No API token for app ${targetAppId}`);
   }
 
   const headers: Record<string, string> = {
@@ -113,18 +123,17 @@ async function kintoneRequest(
     const data = await response.json();
 
     if (!response.ok) {
-      console.error('Kintone API Error:', {
-        endpoint,
+      console.error('[Kintone] API Error:', {
         status: response.status,
-        error: data,
-        appId: targetAppId
+        message: data.message,
+        code: data.code
       });
       throw new Error(data.message || `Kintone error: ${response.status}`);
     }
 
     return data;
   } catch (error) {
-    console.error('Kintone request failed:', error);
+    console.error('[Kintone] Request failed:', error);
     throw error;
   }
 }
@@ -136,10 +145,7 @@ export async function getRecords(
   fields?: string[],
   totalCount: boolean = false
 ): Promise<KintoneResponse> {
-  const params = new URLSearchParams({
-    app: appId.toString(),
-  });
-
+  const params = new URLSearchParams({ app: appId.toString() });
   if (query) params.append('query', query);
   if (fields) params.append('fields', JSON.stringify(fields));
   if (totalCount) params.append('totalCount', 'true');
@@ -153,7 +159,6 @@ export async function getRecord(appId: number, recordId: number): Promise<any> {
     app: appId.toString(),
     id: recordId.toString(),
   });
-
   const response = await kintoneRequest(`record.json?${params.toString()}`, 'GET', undefined, appId);
   return response.record;
 }
@@ -164,11 +169,7 @@ export async function addRecord(appId: number, record: any): Promise<{ id: strin
 }
 
 // Update record
-export async function updateRecord(
-  appId: number,
-  recordId: number,
-  record: any
-): Promise<{ revision: string }> {
+export async function updateRecord(appId: number, recordId: number, record: any): Promise<{ revision: string }> {
   return kintoneRequest('record.json', 'PUT', { app: appId, id: recordId, record }, appId);
 }
 
@@ -198,17 +199,21 @@ export interface Employee {
 }
 
 export async function getEmployeeByEmail(email: string): Promise<Employee | null> {
+  console.log('[Kintone] getEmployeeByEmail:', email);
   try {
     const query = `email = "${email}"`;
     const response = await getRecords(KINTONE_APPS.EMPLOYEES, query);
 
     if (!response.records || response.records.length === 0) {
+      console.log('[Kintone] No employee found for:', email);
       return null;
     }
 
-    return mapEmployeeRecord(response.records[0]);
+    const emp = mapEmployeeRecord(response.records[0]);
+    console.log('[Kintone] Found employee:', emp.employeeId);
+    return emp;
   } catch (error) {
-    console.error('getEmployeeByEmail error:', error);
+    console.error('[Kintone] getEmployeeByEmail error:', error);
     throw error;
   }
 }
@@ -226,14 +231,9 @@ export async function getEmployeeByEmployeeId(employeeId: string): Promise<Emplo
   try {
     const query = `employee_id = "${employeeId}"`;
     const response = await getRecords(KINTONE_APPS.EMPLOYEES, query);
-
-    if (!response.records || response.records.length === 0) {
-      return null;
-    }
-
+    if (!response.records || response.records.length === 0) return null;
     return mapEmployeeRecord(response.records[0]);
-  } catch (error) {
-    console.error('getEmployeeByEmployeeId error:', error);
+  } catch {
     return null;
   }
 }
@@ -261,10 +261,7 @@ function mapEmployeeRecord(r: any): Employee {
   };
 }
 
-export async function updateEmployeePassword(
-  recordId: number,
-  passwordHash: string
-): Promise<void> {
+export async function updateEmployeePassword(recordId: number, passwordHash: string): Promise<void> {
   await updateRecord(KINTONE_APPS.EMPLOYEES, recordId, {
     password_hash: { value: passwordHash },
     is_verified: { value: 'Yes' },
@@ -272,26 +269,18 @@ export async function updateEmployeePassword(
   });
 }
 
-export async function setVerificationToken(
-  recordId: number,
-  token: string
-): Promise<void> {
+export async function setVerificationToken(recordId: number, token: string): Promise<void> {
   await updateRecord(KINTONE_APPS.EMPLOYEES, recordId, {
     verification_token: { value: token },
   });
 }
 
-export async function updateEmployeeProfile(
-  recordId: number,
-  data: Partial<Employee>
-): Promise<void> {
+export async function updateEmployeeProfile(recordId: number, data: Partial<Employee>): Promise<void> {
   const record: any = {};
-  
   if (data.contactNumber !== undefined) record.contact_number = { value: data.contactNumber };
   if (data.address !== undefined) record.address = { value: data.address };
   if (data.emergencyContact !== undefined) record.emergency_contact = { value: data.emergencyContact };
   if (data.emergencyNumber !== undefined) record.emergency_number = { value: data.emergencyNumber };
-
   await updateRecord(KINTONE_APPS.EMPLOYEES, recordId, record);
 }
 
@@ -318,9 +307,7 @@ export interface LeaveRequest {
 export async function getEmployeeLeaveRequests(employeeId: string): Promise<LeaveRequest[]> {
   const query = `employee_id = "${employeeId}" order by Created_datetime desc limit 100`;
   const response = await getRecords(KINTONE_APPS.LEAVE_REQUESTS, query);
-
   if (!response.records) return [];
-
   return response.records.map((r: any) => ({
     id: parseInt(r.$id.value),
     employeeId: r.employee_id?.value || '',
@@ -341,13 +328,7 @@ export async function getEmployeeLeaveRequests(employeeId: string): Promise<Leav
 export async function createLeaveRequest(
   employeeId: string,
   employeeName: string,
-  data: {
-    leaveType: string;
-    startDate: string;
-    endDate: string;
-    totalDays: number;
-    reason: string;
-  }
+  data: { leaveType: string; startDate: string; endDate: string; totalDays: number; reason: string }
 ): Promise<{ id: string }> {
   return addRecord(KINTONE_APPS.LEAVE_REQUESTS, {
     employee_id: { value: employeeId },
@@ -376,9 +357,7 @@ export interface LeaveBalance {
 export async function getEmployeeLeaveBalances(employeeId: string): Promise<LeaveBalance[]> {
   const query = `employee_id = "${employeeId}"`;
   const response = await getRecords(KINTONE_APPS.LEAVE_BALANCES, query);
-
   if (!response.records) return [];
-
   return response.records.map((r: any) => ({
     leaveType: r.leave_type?.value || '',
     totalCredits: parseFloat(r.total_credits?.value || '0'),
@@ -407,9 +386,7 @@ export interface DocumentRequest {
 export async function getEmployeeDocumentRequests(employeeId: string): Promise<DocumentRequest[]> {
   const query = `employee_id = "${employeeId}" order by Created_datetime desc limit 100`;
   const response = await getRecords(KINTONE_APPS.DOCUMENT_REQUESTS, query);
-
   if (!response.records) return [];
-
   return response.records.map((r: any) => ({
     id: parseInt(r.$id.value),
     employeeId: r.employee_id?.value || '',
@@ -427,11 +404,7 @@ export async function getEmployeeDocumentRequests(employeeId: string): Promise<D
 export async function createDocumentRequest(
   employeeId: string,
   employeeName: string,
-  data: {
-    documentType: string;
-    purpose: string;
-    quantity: number;
-  }
+  data: { documentType: string; purpose: string; quantity: number }
 ): Promise<{ id: string }> {
   return addRecord(KINTONE_APPS.DOCUMENT_REQUESTS, {
     employee_id: { value: employeeId },
@@ -463,9 +436,7 @@ export async function getActiveAnnouncements(): Promise<Announcement[]> {
   const today = new Date().toISOString().split('T')[0];
   const query = `is_active = "Yes" and publish_date <= "${today}" order by priority desc, publish_date desc limit 20`;
   const response = await getRecords(KINTONE_APPS.ANNOUNCEMENTS, query);
-
   if (!response.records) return [];
-
   return response.records.map((r: any) => ({
     id: parseInt(r.$id.value),
     title: r.title?.value || '',
@@ -501,16 +472,11 @@ export async function getEmployeeDTR(employeeId: string, month?: string): Promis
   let query = `employee_id = "${employeeId}"`;
   if (month) {
     const [year, m] = month.split('-');
-    const startDate = `${year}-${m}-01`;
-    const endDate = `${year}-${m}-31`;
-    query += ` and date >= "${startDate}" and date <= "${endDate}"`;
+    query += ` and date >= "${year}-${m}-01" and date <= "${year}-${m}-31"`;
   }
   query += ' order by date desc limit 100';
-  
   const response = await getRecords(KINTONE_APPS.DTR, query);
-
   if (!response.records) return [];
-
   return response.records.map((r: any) => ({
     id: parseInt(r.$id.value),
     employeeId: r.employee_id?.value || '',
@@ -531,11 +497,7 @@ export async function getTodayDTR(employeeId: string): Promise<DTRRecord | null>
   const today = new Date().toISOString().split('T')[0];
   const query = `employee_id = "${employeeId}" and date = "${today}"`;
   const response = await getRecords(KINTONE_APPS.DTR, query);
-
-  if (!response.records || response.records.length === 0) {
-    return null;
-  }
-
+  if (!response.records || response.records.length === 0) return null;
   const r = response.records[0];
   return {
     id: parseInt(r.$id.value),
@@ -556,7 +518,6 @@ export async function getTodayDTR(employeeId: string): Promise<DTRRecord | null>
 export async function clockIn(employeeId: string, employeeName: string, location?: string): Promise<void> {
   const today = new Date().toISOString().split('T')[0];
   const timeNow = new Date().toLocaleTimeString('en-US', { hour12: false, hour: '2-digit', minute: '2-digit' });
-  
   await addRecord(KINTONE_APPS.DTR, {
     employee_id: { value: employeeId },
     employee_name: { value: employeeName },
@@ -569,14 +530,11 @@ export async function clockIn(employeeId: string, employeeName: string, location
 
 export async function clockOut(recordId: number): Promise<void> {
   const timeNow = new Date().toLocaleTimeString('en-US', { hour12: false, hour: '2-digit', minute: '2-digit' });
-  
-  await updateRecord(KINTONE_APPS.DTR, recordId, {
-    time_out: { value: timeNow },
-  });
+  await updateRecord(KINTONE_APPS.DTR, recordId, { time_out: { value: timeNow } });
 }
 
 // =====================
-// Payroll Operations
+// Payroll, Benefits, Loans (simplified)
 // =====================
 
 export interface PayrollRecord {
@@ -585,16 +543,7 @@ export interface PayrollRecord {
   periodStart: string;
   periodEnd: string;
   basicPay: number;
-  overtimePay: number;
-  holidayPay: number;
-  allowances: number;
   grossPay: number;
-  sssDeduction: number;
-  philhealthDeduction: number;
-  pagibigDeduction: number;
-  taxDeduction: number;
-  loanDeduction: number;
-  otherDeductions: number;
   totalDeductions: number;
   netPay: number;
   status: string;
@@ -603,41 +552,23 @@ export interface PayrollRecord {
 
 export async function getEmployeePayroll(employeeId: string, year?: number): Promise<PayrollRecord[]> {
   let query = `employee_id = "${employeeId}"`;
-  if (year) {
-    query += ` and pay_period_start >= "${year}-01-01" and pay_period_start <= "${year}-12-31"`;
-  }
+  if (year) query += ` and pay_period_start >= "${year}-01-01" and pay_period_start <= "${year}-12-31"`;
   query += ' order by pay_period_start desc limit 50';
-  
   const response = await getRecords(KINTONE_APPS.PAYROLL, query);
-
   if (!response.records) return [];
-
   return response.records.map((r: any) => ({
     id: parseInt(r.$id.value),
     employeeId: r.employee_id?.value || '',
     periodStart: r.pay_period_start?.value || '',
     periodEnd: r.pay_period_end?.value || '',
     basicPay: parseFloat(r.basic_pay?.value || '0'),
-    overtimePay: parseFloat(r.overtime_pay?.value || '0'),
-    holidayPay: parseFloat(r.holiday_pay?.value || '0'),
-    allowances: parseFloat(r.allowances?.value || '0'),
     grossPay: parseFloat(r.gross_pay?.value || '0'),
-    sssDeduction: parseFloat(r.sss_deduction?.value || '0'),
-    philhealthDeduction: parseFloat(r.philhealth_deduction?.value || '0'),
-    pagibigDeduction: parseFloat(r.pagibig_deduction?.value || '0'),
-    taxDeduction: parseFloat(r.tax_deduction?.value || '0'),
-    loanDeduction: parseFloat(r.loan_deduction?.value || '0'),
-    otherDeductions: parseFloat(r.other_deductions?.value || '0'),
     totalDeductions: parseFloat(r.total_deductions?.value || '0'),
     netPay: parseFloat(r.net_pay?.value || '0'),
     status: r.status?.value || '',
     payDate: r.pay_date?.value || '',
   }));
 }
-
-// =====================
-// Benefits Operations
-// =====================
 
 export interface Benefits {
   employeeId: string;
@@ -647,20 +578,12 @@ export interface Benefits {
   tinNumber: string;
   hmoProvider: string;
   hmoPlan: string;
-  hmoCardNumber: string;
-  hmoDependents: number;
-  bankName: string;
-  bankAccount: string;
 }
 
 export async function getEmployeeBenefits(employeeId: string): Promise<Benefits | null> {
   const query = `employee_id = "${employeeId}"`;
   const response = await getRecords(KINTONE_APPS.BENEFITS, query);
-
-  if (!response.records || response.records.length === 0) {
-    return null;
-  }
-
+  if (!response.records || response.records.length === 0) return null;
   const r = response.records[0];
   return {
     employeeId: r.employee_id?.value || '',
@@ -670,50 +593,28 @@ export async function getEmployeeBenefits(employeeId: string): Promise<Benefits 
     tinNumber: r.tin_number?.value || '',
     hmoProvider: r.hmo_provider?.value || '',
     hmoPlan: r.hmo_plan?.value || '',
-    hmoCardNumber: r.hmo_card_number?.value || '',
-    hmoDependents: parseInt(r.hmo_dependents?.value || '0'),
-    bankName: r.bank_name?.value || '',
-    bankAccount: r.bank_account?.value || '',
   };
 }
-
-// =====================
-// Loans Operations
-// =====================
 
 export interface Loan {
   id: number;
   employeeId: string;
   loanType: string;
-  principalAmount: number;
-  interestRate: number;
   totalAmount: number;
-  monthlyAmortization: number;
-  totalPaid: number;
   balance: number;
-  startDate: string;
-  endDate: string;
   status: string;
 }
 
 export async function getEmployeeLoans(employeeId: string): Promise<Loan[]> {
   const query = `employee_id = "${employeeId}" order by start_date desc`;
   const response = await getRecords(KINTONE_APPS.LOANS, query);
-
   if (!response.records) return [];
-
   return response.records.map((r: any) => ({
     id: parseInt(r.$id.value),
     employeeId: r.employee_id?.value || '',
     loanType: r.loan_type?.value || '',
-    principalAmount: parseFloat(r.principal_amount?.value || '0'),
-    interestRate: parseFloat(r.interest_rate?.value || '0'),
     totalAmount: parseFloat(r.total_amount?.value || '0'),
-    monthlyAmortization: parseFloat(r.monthly_amortization?.value || '0'),
-    totalPaid: parseFloat(r.total_paid?.value || '0'),
     balance: parseFloat(r.balance?.value || '0'),
-    startDate: r.start_date?.value || '',
-    endDate: r.end_date?.value || '',
     status: r.status?.value || '',
   }));
 }
