@@ -5,12 +5,11 @@ import { getEmployeeLeaveBalances } from '@/lib/kintone';
 export async function GET() {
   try {
     const user = await getCurrentUser();
-
     if (!user) {
       return NextResponse.json({ error: 'Not authenticated' }, { status: 401 });
     }
 
-    const balances = await getEmployeeLeaveBalances(user.id);
+    const balances = await getEmployeeLeaveBalances(user.employeeId);
 
     return NextResponse.json({
       balances: balances.map((b) => ({
@@ -22,9 +21,6 @@ export async function GET() {
     });
   } catch (error) {
     console.error('Get leave balances error:', error);
-    return NextResponse.json(
-      { error: 'Failed to fetch leave balances' },
-      { status: 500 }
-    );
+    return NextResponse.json({ error: 'Failed to fetch leave balances' }, { status: 500 });
   }
 }
