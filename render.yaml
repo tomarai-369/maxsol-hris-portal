@@ -1,0 +1,35 @@
+services:
+  - type: web
+    name: hris-portal
+    runtime: node
+    buildCommand: npm install && npm run build
+    startCommand: npm start
+    envVars:
+      - key: KINTONE_DOMAIN
+        value: ms-corp.cybozu.com
+      - key: KINTONE_USER
+        value: Administrator
+      - key: KINTONE_PASS
+        value: Edamame!2345
+      - key: JWT_SECRET
+        value: mscorp-hris-secret-key-2024
+      - key: KINTONE_APP_EMPLOYEES
+        value: "303"
+      - key: KINTONE_APP_LEAVE_REQUESTS
+        value: "304"
+      - key: KINTONE_APP_DOCUMENT_REQUESTS
+        value: "305"
+      - key: KINTONE_APP_ANNOUNCEMENTS
+        value: "306"
+      - key: KINTONE_APP_LEAVE_BALANCES
+        value: "307"
+      - key: KINTONE_APP_DTR
+        value: "308"
+      - key: KINTONE_APP_PAYROLL
+        value: "309"
+      - key: KINTONE_APP_BENEFITS
+        value: "310"
+      - key: KINTONE_APP_LOANS
+        value: "311"
+      - key: KINTONE_APP_SCHEDULES
+        value: "312"
