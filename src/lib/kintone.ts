@@ -1,7 +1,24 @@
-// Kintone API wrapper - FIXED: Don't send Content-Type on GET requests
+// Kintone API wrapper - Multi-token support for different apps
 
 const KINTONE_DOMAIN = process.env.KINTONE_DOMAIN || 'ms-corp.cybozu.com';
-const KINTONE_API_TOKEN = process.env.KINTONE_API_TOKEN || '';
+
+// App-specific tokens
+const APP_TOKENS: Record<number, string> = {
+  303: process.env.KINTONE_TOKEN_EMPLOYEES || process.env.KINTONE_API_TOKEN || '',
+  304: process.env.KINTONE_TOKEN_LEAVE_REQUESTS || '',
+  305: process.env.KINTONE_TOKEN_DOCUMENT_REQUESTS || '',
+  306: process.env.KINTONE_TOKEN_ANNOUNCEMENTS || '',
+  307: process.env.KINTONE_TOKEN_LEAVE_BALANCES || '',
+  308: process.env.KINTONE_TOKEN_DTR || '',
+  309: process.env.KINTONE_TOKEN_PAYROLL || '',
+  310: process.env.KINTONE_TOKEN_BENEFITS || '',
+  311: process.env.KINTONE_TOKEN_LOANS || '',
+  312: process.env.KINTONE_TOKEN_SCHEDULES || '',
+};
+
+function getTokenForApp(appId: number): string {
+  return APP_TOKENS[appId] || '';
+}
 
 export const KINTONE_APPS = {
   EMPLOYEES: 303,
@@ -16,14 +33,27 @@ export const KINTONE_APPS = {
   SCHEDULES: 312,
 };
 
-async function kintoneRequest(endpoint: string, method: string = 'GET', body?: any): Promise<any> {
+async function kintoneRequest(endpoint: string, method: string = 'GET', body?: any, appId?: number): Promise<any> {
   const url = `https://${KINTONE_DOMAIN}/k/v1/${endpoint}`;
   
-  // Only add Content-Type for POST/PUT requests, NOT for GET!
-  const headers: Record<string, string> = {
-    'X-Cybozu-API-Token': KINTONE_API_TOKEN,
-  };
+  // Determine app ID from endpoint or body
+  let targetApp = appId;
+  if (!targetApp && body?.app) targetApp = body.app;
+  if (!targetApp) {
+    const match = endpoint.match(/app=(\d+)/);
+    if (match) targetApp = parseInt(match[1]);
+  }
   
+  const token = targetApp ? getTokenForApp(targetApp) : '';
+  
+  if (!token) {
+    throw new Error(`No API token configured for app ${targetApp}`);
+  }
+  
+  // Only add Content-Type for POST/PUT, NOT for GET!
+  const headers: Record<string, string> = {
+    'X-Cybozu-API-Token': token,
+  };
   if (method !== 'GET') {
     headers['Content-Type'] = 'application/json';
   }
@@ -36,7 +66,7 @@ async function kintoneRequest(endpoint: string, method: string = 'GET', body?: a
 
   const data = await response.json();
   if (!response.ok) {
-    console.error('Kintone Error:', { url, status: response.status, data });
+    console.error('Kintone Error:', { url, status: response.status, data, appId: targetApp });
     throw new Error(`Kintone API Error: ${data.message || response.status}`);
   }
   return data;
@@ -47,21 +77,21 @@ export async function getRecords(appId: number, query: string = '', fields?: str
   if (query) params.append('query', query);
   if (fields) params.append('fields', JSON.stringify(fields));
   if (totalCount) params.append('totalCount', 'true');
-  return kintoneRequest(`records.json?${params.toString()}`);
+  return kintoneRequest(`records.json?${params.toString()}`, 'GET', undefined, appId);
 }
 
 export async function getRecord(appId: number, recordId: number) {
   const params = new URLSearchParams({ app: appId.toString(), id: recordId.toString() });
-  const response = await kintoneRequest(`record.json?${params.toString()}`);
+  const response = await kintoneRequest(`record.json?${params.toString()}`, 'GET', undefined, appId);
   return response.record;
 }
 
 export async function addRecord(appId: number, record: any) {
-  return kintoneRequest('record.json', 'POST', { app: appId, record });
+  return kintoneRequest('record.json', 'POST', { app: appId, record }, appId);
 }
 
 export async function updateRecord(appId: number, recordId: number, record: any) {
-  return kintoneRequest('record.json', 'PUT', { app: appId, id: recordId, record });
+  return kintoneRequest('record.json', 'PUT', { app: appId, id: recordId, record }, appId);
 }
 
 // Employee types and functions
