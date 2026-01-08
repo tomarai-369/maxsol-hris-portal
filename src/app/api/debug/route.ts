@@ -2,85 +2,52 @@ import { NextResponse } from 'next/server';
 
 export async function GET() {
   const KINTONE_DOMAIN = process.env.KINTONE_DOMAIN || 'ms-corp.cybozu.com';
-  const KINTONE_API_TOKEN = process.env.KINTONE_API_TOKEN || '';
   
-  const url = `https://${KINTONE_DOMAIN}/k/v1/records.json?app=303`;
-  const results: any = {};
+  // Get tokens for different apps
+  const tokens = {
+    employees: process.env.KINTONE_TOKEN_EMPLOYEES || '',
+    announcements: process.env.KINTONE_TOKEN_ANNOUNCEMENTS || '',
+    leaveBalances: process.env.KINTONE_TOKEN_LEAVE_BALANCES || '',
+  };
+  
+  const results: any = {
+    tokenLengths: {
+      employees: tokens.employees.length,
+      announcements: tokens.announcements.length,
+      leaveBalances: tokens.leaveBalances.length,
+    },
+    tests: {}
+  };
 
-  // Test 1: Basic (current approach)
+  // Test 1: Employees (303)
   try {
-    const resp = await fetch(url, {
+    const resp = await fetch(`https://${KINTONE_DOMAIN}/k/v1/records.json?app=303`, {
       method: 'GET',
-      headers: {
-        'X-Cybozu-API-Token': KINTONE_API_TOKEN,
-        'Content-Type': 'application/json',
-      },
+      headers: { 'X-Cybozu-API-Token': tokens.employees },
     });
     const data = await resp.json();
-    results.test1_basic = { status: resp.status, ok: resp.ok, records: data.records?.length, error: data.code };
-  } catch (e: any) { results.test1_basic = { error: e.message }; }
+    results.tests.employees = { status: resp.status, ok: resp.ok, records: data.records?.length, error: data.code };
+  } catch (e: any) { results.tests.employees = { error: e.message }; }
 
-  // Test 2: With Origin header
+  // Test 2: Announcements (306)
   try {
-    const resp = await fetch(url, {
+    const resp = await fetch(`https://${KINTONE_DOMAIN}/k/v1/records.json?app=306`, {
       method: 'GET',
-      headers: {
-        'X-Cybozu-API-Token': KINTONE_API_TOKEN,
-        'Content-Type': 'application/json',
-        'Origin': `https://${KINTONE_DOMAIN}`,
-      },
+      headers: { 'X-Cybozu-API-Token': tokens.announcements },
     });
     const data = await resp.json();
-    results.test2_withOrigin = { status: resp.status, ok: resp.ok, records: data.records?.length, error: data.code };
-  } catch (e: any) { results.test2_withOrigin = { error: e.message }; }
+    results.tests.announcements = { status: resp.status, ok: resp.ok, records: data.records?.length, error: data.code };
+  } catch (e: any) { results.tests.announcements = { error: e.message }; }
 
-  // Test 3: With User-Agent
+  // Test 3: Leave Balances (307)
   try {
-    const resp = await fetch(url, {
+    const resp = await fetch(`https://${KINTONE_DOMAIN}/k/v1/records.json?app=307`, {
       method: 'GET',
-      headers: {
-        'X-Cybozu-API-Token': KINTONE_API_TOKEN,
-        'Content-Type': 'application/json',
-        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
-      },
+      headers: { 'X-Cybozu-API-Token': tokens.leaveBalances },
     });
     const data = await resp.json();
-    results.test3_withUserAgent = { status: resp.status, ok: resp.ok, records: data.records?.length, error: data.code };
-  } catch (e: any) { results.test3_withUserAgent = { error: e.message }; }
-
-  // Test 4: Minimal headers
-  try {
-    const resp = await fetch(url, {
-      method: 'GET',
-      headers: {
-        'X-Cybozu-API-Token': KINTONE_API_TOKEN,
-      },
-    });
-    const data = await resp.json();
-    results.test4_minimal = { status: resp.status, ok: resp.ok, records: data.records?.length, error: data.code };
-  } catch (e: any) { results.test4_minimal = { error: e.message }; }
-
-  // Test 5: Using node's https directly
-  try {
-    const https = require('https');
-    const data = await new Promise((resolve, reject) => {
-      const req = https.request(url, {
-        method: 'GET',
-        headers: {
-          'X-Cybozu-API-Token': KINTONE_API_TOKEN,
-          'Content-Type': 'application/json',
-        }
-      }, (res: any) => {
-        let body = '';
-        res.on('data', (chunk: any) => body += chunk);
-        res.on('end', () => resolve({ status: res.statusCode, body }));
-      });
-      req.on('error', reject);
-      req.end();
-    }) as any;
-    const json = JSON.parse(data.body);
-    results.test5_https = { status: data.status, records: json.records?.length, error: json.code };
-  } catch (e: any) { results.test5_https = { error: e.message }; }
+    results.tests.leaveBalances = { status: resp.status, ok: resp.ok, records: data.records?.length, error: data.code };
+  } catch (e: any) { results.tests.leaveBalances = { error: e.message }; }
 
   return NextResponse.json(results);
 }
