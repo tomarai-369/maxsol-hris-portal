@@ -20,7 +20,12 @@ export async function hashPassword(password: string): Promise<string> {
 
 // Verify password
 export async function verifyPassword(password: string, hash: string): Promise<boolean> {
-  return bcrypt.compare(password, hash);
+  try {
+    return await bcrypt.compare(password, hash);
+  } catch (error) {
+    console.error('Password verification error:', error);
+    return false;
+  }
 }
 
 // Generate JWT token
@@ -60,27 +65,47 @@ export async function authenticateUser(
   email: string,
   password: string
 ): Promise<{ success: boolean; token?: string; employee?: Employee; error?: string }> {
-  const employee = await getEmployeeByEmail(email);
+  console.log('authenticateUser called for:', email);
+  
+  try {
+    const employee = await getEmployeeByEmail(email);
+    console.log('Employee found:', employee ? 'yes' : 'no');
 
-  if (!employee) {
-    return { success: false, error: 'Email not found. Please contact HR.' };
+    if (!employee) {
+      return { success: false, error: 'Email not found. Please contact HR.' };
+    }
+
+    console.log('Employee data:', {
+      id: employee.id,
+      email: employee.email,
+      isVerified: employee.isVerified,
+      hasPasswordHash: !!employee.passwordHash,
+      passwordHashLength: employee.passwordHash?.length
+    });
+
+    if (!employee.isVerified || !employee.passwordHash) {
+      return { success: false, error: 'Account not activated. Please activate your account first.' };
+    }
+
+    console.log('Verifying password...');
+    const isValid = await verifyPassword(password, employee.passwordHash);
+    console.log('Password valid:', isValid);
+    
+    if (!isValid) {
+      return { success: false, error: 'Invalid password.' };
+    }
+
+    const token = generateToken({
+      employeeId: employee.id,
+      email: employee.email,
+      firstName: employee.firstName,
+      lastName: employee.lastName,
+    });
+
+    console.log('Login successful for:', email);
+    return { success: true, token, employee };
+  } catch (error) {
+    console.error('authenticateUser error:', error);
+    throw error;
   }
-
-  if (!employee.isVerified || !employee.passwordHash) {
-    return { success: false, error: 'Account not activated. Please check your email for activation link.' };
-  }
-
-  const isValid = await verifyPassword(password, employee.passwordHash);
-  if (!isValid) {
-    return { success: false, error: 'Invalid password.' };
-  }
-
-  const token = generateToken({
-    employeeId: employee.id,
-    email: employee.email,
-    firstName: employee.firstName,
-    lastName: employee.lastName,
-  });
-
-  return { success: true, token, employee };
 }
