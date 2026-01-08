@@ -1,20 +1,58 @@
 // Kintone API wrapper for HRIS Portal
 
 const KINTONE_DOMAIN = process.env.KINTONE_DOMAIN || 'ms-corp.cybozu.com';
-const KINTONE_API_TOKEN = process.env.KINTONE_API_TOKEN || '';
+
+// Individual API tokens for each app
+const API_TOKENS: Record<number, string> = {
+  303: process.env.KINTONE_TOKEN_EMPLOYEES || '',      // Employees
+  304: process.env.KINTONE_TOKEN_LEAVE_REQUESTS || '', // Leave Requests
+  305: process.env.KINTONE_TOKEN_DOCUMENT_REQUESTS || '', // Document Requests
+  306: process.env.KINTONE_TOKEN_ANNOUNCEMENTS || '',  // Announcements
+  307: process.env.KINTONE_TOKEN_LEAVE_BALANCES || '', // Leave Balances
+  308: process.env.KINTONE_TOKEN_DTR || '',            // DTR
+  309: process.env.KINTONE_TOKEN_PAYROLL || '',        // Payroll
+  310: process.env.KINTONE_TOKEN_BENEFITS || '',       // Benefits
+  311: process.env.KINTONE_TOKEN_LOANS || '',          // Loans
+  312: process.env.KINTONE_TOKEN_SCHEDULES || '',      // Schedules
+};
+
+// Fallback: parse comma-separated tokens (legacy support)
+const COMBINED_TOKENS = (process.env.KINTONE_API_TOKEN || '').split(',').filter(t => t.trim());
+
+// Get token for specific app
+function getTokenForApp(appId: number): string {
+  // First try individual token
+  if (API_TOKENS[appId]) {
+    return API_TOKENS[appId];
+  }
+  
+  // Fallback to combined tokens by index
+  const appIndex: Record<number, number> = {
+    303: 0, 304: 1, 305: 2, 306: 3, 307: 4,
+    308: 5, 309: 6, 310: 7, 311: 8, 312: 9
+  };
+  
+  const index = appIndex[appId];
+  if (index !== undefined && COMBINED_TOKENS[index]) {
+    return COMBINED_TOKENS[index];
+  }
+  
+  // Last resort: use first token (for Employees app)
+  return COMBINED_TOKENS[0] || '';
+}
 
 // App IDs
 export const KINTONE_APPS = {
-  EMPLOYEES: parseInt(process.env.KINTONE_APP_EMPLOYEES || '303'),
-  LEAVE_REQUESTS: parseInt(process.env.KINTONE_APP_LEAVE_REQUESTS || '304'),
-  DOCUMENT_REQUESTS: parseInt(process.env.KINTONE_APP_DOCUMENT_REQUESTS || '305'),
-  ANNOUNCEMENTS: parseInt(process.env.KINTONE_APP_ANNOUNCEMENTS || '306'),
-  LEAVE_BALANCES: parseInt(process.env.KINTONE_APP_LEAVE_BALANCES || '307'),
-  DTR: parseInt(process.env.KINTONE_APP_DTR || '308'),
-  PAYROLL: parseInt(process.env.KINTONE_APP_PAYROLL || '309'),
-  BENEFITS: parseInt(process.env.KINTONE_APP_BENEFITS || '310'),
-  LOANS: parseInt(process.env.KINTONE_APP_LOANS || '311'),
-  SCHEDULES: parseInt(process.env.KINTONE_APP_SCHEDULES || '312'),
+  EMPLOYEES: 303,
+  LEAVE_REQUESTS: 304,
+  DOCUMENT_REQUESTS: 305,
+  ANNOUNCEMENTS: 306,
+  LEAVE_BALANCES: 307,
+  DTR: 308,
+  PAYROLL: 309,
+  BENEFITS: 310,
+  LOANS: 311,
+  SCHEDULES: 312,
 };
 
 interface KintoneResponse {
@@ -25,16 +63,33 @@ interface KintoneResponse {
   totalCount?: string;
 }
 
-// Generic Kintone API call
+// Generic Kintone API call - uses app-specific token
 async function kintoneRequest(
   endpoint: string,
   method: string = 'GET',
-  body?: any
+  body?: any,
+  appId?: number
 ): Promise<any> {
   const url = `https://${KINTONE_DOMAIN}/k/v1/${endpoint}`;
   
+  // Determine which app we're accessing
+  let targetAppId = appId;
+  if (!targetAppId && body?.app) {
+    targetAppId = body.app;
+  }
+  if (!targetAppId) {
+    // Try to extract from URL query params
+    const match = endpoint.match(/app=(\d+)/);
+    if (match) {
+      targetAppId = parseInt(match[1]);
+    }
+  }
+  
+  // Get the appropriate token for this app
+  const token = targetAppId ? getTokenForApp(targetAppId) : COMBINED_TOKENS[0];
+  
   const headers: Record<string, string> = {
-    'X-Cybozu-API-Token': KINTONE_API_TOKEN,
+    'X-Cybozu-API-Token': token,
     'Content-Type': 'application/json',
   };
 
@@ -56,7 +111,8 @@ async function kintoneRequest(
       console.error('Kintone API Error:', {
         endpoint,
         status: response.status,
-        error: data
+        error: data,
+        appId: targetAppId
       });
       throw new Error(data.message || `Kintone error: ${response.status}`);
     }
@@ -83,7 +139,7 @@ export async function getRecords(
   if (fields) params.append('fields', JSON.stringify(fields));
   if (totalCount) params.append('totalCount', 'true');
 
-  return kintoneRequest(`records.json?${params.toString()}`);
+  return kintoneRequest(`records.json?${params.toString()}`, 'GET', undefined, appId);
 }
 
 // Get single record
@@ -93,16 +149,13 @@ export async function getRecord(appId: number, recordId: number): Promise<any> {
     id: recordId.toString(),
   });
 
-  const response = await kintoneRequest(`record.json?${params.toString()}`);
+  const response = await kintoneRequest(`record.json?${params.toString()}`, 'GET', undefined, appId);
   return response.record;
 }
 
 // Add record
 export async function addRecord(appId: number, record: any): Promise<{ id: string; revision: string }> {
-  return kintoneRequest('record.json', 'POST', {
-    app: appId,
-    record,
-  });
+  return kintoneRequest('record.json', 'POST', { app: appId, record }, appId);
 }
 
 // Update record
@@ -111,11 +164,7 @@ export async function updateRecord(
   recordId: number,
   record: any
 ): Promise<{ revision: string }> {
-  return kintoneRequest('record.json', 'PUT', {
-    app: appId,
-    id: recordId,
-    record,
-  });
+  return kintoneRequest('record.json', 'PUT', { app: appId, id: recordId, record }, appId);
 }
 
 // =====================
@@ -597,7 +646,6 @@ export interface Benefits {
   hmoDependents: number;
   bankName: string;
   bankAccount: string;
-  lifeInsurancePolicy: string;
 }
 
 export async function getEmployeeBenefits(employeeId: string): Promise<Benefits | null> {
@@ -621,7 +669,6 @@ export async function getEmployeeBenefits(employeeId: string): Promise<Benefits 
     hmoDependents: parseInt(r.hmo_dependents?.value || '0'),
     bankName: r.bank_name?.value || '',
     bankAccount: r.bank_account?.value || '',
-    lifeInsurancePolicy: r.life_insurance_policy?.value || '',
   };
 }
 
