@@ -1,5 +1,5 @@
 // Kintone API wrapper for HRIS Portal
-// Uses Password Authentication (more reliable than API tokens)
+// Uses Password Authentication
 
 const KINTONE_DOMAIN = process.env.KINTONE_DOMAIN || 'ms-corp.cybozu.com';
 const KINTONE_USER = process.env.KINTONE_USER || 'Administrator';
@@ -8,12 +8,7 @@ const KINTONE_PASS = process.env.KINTONE_PASS || '';
 // Create base64 auth header
 function getAuthHeader(): string {
   const credentials = `${KINTONE_USER}:${KINTONE_PASS}`;
-  // Use Buffer for Node.js environment
-  if (typeof Buffer !== 'undefined') {
-    return Buffer.from(credentials).toString('base64');
-  }
-  // Fallback for browser (shouldn't be used in API routes)
-  return btoa(credentials);
+  return Buffer.from(credentials).toString('base64');
 }
 
 export const KINTONE_APPS = {
@@ -44,9 +39,18 @@ async function kintoneRequest(
   body?: any
 ): Promise<any> {
   const url = `https://${KINTONE_DOMAIN}/k/v1/${endpoint}`;
+  const authHeader = getAuthHeader();
   
+  console.log('[KINTONE DEBUG]', {
+    url,
+    method,
+    authHeader: authHeader.substring(0, 20) + '...',
+    user: KINTONE_USER,
+    passLength: KINTONE_PASS?.length || 0
+  });
+
   const headers: Record<string, string> = {
-    'X-Cybozu-Authorization': getAuthHeader(),
+    'X-Cybozu-Authorization': authHeader,
     'Content-Type': 'application/json',
   };
 
@@ -63,8 +67,14 @@ async function kintoneRequest(
   const response = await fetch(url, options);
   const data = await response.json();
 
+  console.log('[KINTONE RESPONSE]', {
+    status: response.status,
+    ok: response.ok,
+    hasRecords: !!data.records,
+    error: data.message || data.code
+  });
+
   if (!response.ok) {
-    console.error('Kintone API Error:', { endpoint, status: response.status, error: data });
     throw new Error(`Kintone API Error: ${data.message || response.status}`);
   }
 
