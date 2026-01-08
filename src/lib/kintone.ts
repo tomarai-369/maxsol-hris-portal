@@ -229,7 +229,7 @@ export interface Announcement {
 
 export async function getActiveAnnouncements(): Promise<Announcement[]> {
   const today = new Date().toISOString().split('T')[0];
-  const response = await getRecords(KINTONE_APPS.ANNOUNCEMENTS, `is_active = "Yes" and publish_date <= "${today}" order by priority desc limit 20`);
+  const response = await getRecords(KINTONE_APPS.ANNOUNCEMENTS, `is_active in ("Yes") and publish_date <= "${today}" order by priority desc limit 20`);
   return (response.records || []).map((r: any) => ({
     id: parseInt(r.$id.value), title: r.title?.value || '', content: r.content?.value || '',
     category: r.category?.value || 'General', priority: r.priority?.value || 'Normal',
