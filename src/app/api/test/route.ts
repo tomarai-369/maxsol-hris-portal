@@ -1,37 +1,40 @@
 import { NextResponse } from 'next/server';
+import { getEmployeeByEmail } from '@/lib/kintone';
 
 export async function GET() {
+  const authMethod = process.env.KINTONE_PASS ? 'password' : 'api_token';
+  const hasUser = !!process.env.KINTONE_USER;
+  const hasPass = !!process.env.KINTONE_PASS;
+  
   try {
-    const KINTONE_DOMAIN = process.env.KINTONE_DOMAIN || 'ms-corp.cybozu.com';
-    const TOKEN = process.env.KINTONE_TOKEN_EMPLOYEES || '';
-    
-    // Try direct API call
-    const url = `https://${KINTONE_DOMAIN}/k/v1/records.json?app=303&query=email%20%3D%20%22admin%40mscorp.com.ph%22`;
-    
-    const response = await fetch(url, {
-      method: 'GET',
-      headers: {
-        'X-Cybozu-API-Token': TOKEN,
-        'Content-Type': 'application/json',
-      },
-      cache: 'no-store',
-    });
-    
-    const data = await response.json();
+    // Test a simple query
+    const employee = await getEmployeeByEmail('admin@mscorp.com.ph');
     
     return NextResponse.json({
-      status: response.ok ? 'ok' : 'error',
-      httpStatus: response.status,
-      domain: KINTONE_DOMAIN,
-      tokenLength: TOKEN.length,
-      tokenPreview: TOKEN.substring(0, 10) + '...',
-      url: url,
-      response: data,
+      status: 'success',
+      authMethod,
+      envVars: {
+        KINTONE_USER: hasUser ? 'SET' : 'NOT SET',
+        KINTONE_PASS: hasPass ? 'SET' : 'NOT SET',
+        KINTONE_DOMAIN: process.env.KINTONE_DOMAIN || 'default'
+      },
+      employee: employee ? {
+        id: employee.id,
+        email: employee.email,
+        name: `${employee.firstName} ${employee.lastName}`,
+        verified: employee.isVerified
+      } : null
     });
-  } catch (error) {
+  } catch (error: any) {
     return NextResponse.json({
       status: 'error',
-      error: error instanceof Error ? error.message : String(error),
-    }, { status: 500 });
+      authMethod,
+      envVars: {
+        KINTONE_USER: hasUser ? 'SET' : 'NOT SET',
+        KINTONE_PASS: hasPass ? 'SET' : 'NOT SET',
+        KINTONE_DOMAIN: process.env.KINTONE_DOMAIN || 'default'
+      },
+      error: error.message
+    });
   }
 }
