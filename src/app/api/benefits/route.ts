@@ -1,70 +1,39 @@
-import { NextRequest, NextResponse } from 'next/server';
+import { NextResponse } from 'next/server';
 import { getCurrentUser } from '@/lib/auth';
-import { getRecords } from '@/lib/kintone';
+import { getEmployeeBenefits } from '@/lib/kintone';
 
-export async function GET(request: NextRequest) {
+export async function GET() {
   try {
     const user = await getCurrentUser();
-
     if (!user) {
       return NextResponse.json({ error: 'Not authenticated' }, { status: 401 });
     }
 
-    const benefitsAppId = process.env.KINTONE_APP_BENEFITS;
+    const benefits = await getEmployeeBenefits(user.employeeId);
 
-    if (!benefitsAppId) {
-      // Return empty benefits if not configured
+    if (!benefits) {
       return NextResponse.json({
-        sssNumber: '',
-        philhealthNumber: '',
-        pagibigNumber: '',
-        tinNumber: '',
-        hmoProvider: '',
-        hmoPlan: '',
-        hmoCardNumber: '',
-        hmoDependents: 0,
-        lifeInsurancePolicy: '',
-        bankName: '',
-        bankAccount: '',
+        benefits: null,
+        message: 'No benefits record found',
       });
     }
-
-    const query = `employee_id = "${user.id}"`;
-    const response = await getRecords(parseInt(benefitsAppId), query);
-
-    if (!response.records || response.records.length === 0) {
-      return NextResponse.json({
-        sssNumber: '',
-        philhealthNumber: '',
-        pagibigNumber: '',
-        tinNumber: '',
-        hmoProvider: '',
-        hmoPlan: '',
-        hmoCardNumber: '',
-        hmoDependents: 0,
-        lifeInsurancePolicy: '',
-        bankName: '',
-        bankAccount: '',
-      });
-    }
-
-    const r = response.records[0];
 
     return NextResponse.json({
-      sssNumber: r.sss_number?.value || '',
-      philhealthNumber: r.philhealth_number?.value || '',
-      pagibigNumber: r.pagibig_number?.value || '',
-      tinNumber: r.tin_number?.value || '',
-      hmoProvider: r.hmo_provider?.value || '',
-      hmoPlan: r.hmo_plan?.value || '',
-      hmoCardNumber: r.hmo_card_number?.value || '',
-      hmoDependents: parseInt(r.hmo_dependents?.value || '0'),
-      lifeInsurancePolicy: r.life_insurance_policy?.value || '',
-      bankName: r.bank_name?.value || '',
-      bankAccount: r.bank_account?.value || '',
+      benefits: {
+        sssNumber: benefits.sssNumber,
+        philhealthNumber: benefits.philhealthNumber,
+        pagibigNumber: benefits.pagibigNumber,
+        tinNumber: benefits.tinNumber,
+        hmoProvider: benefits.hmoProvider,
+        hmoPlan: benefits.hmoPlan,
+        hmoCardNumber: benefits.hmoCardNumber,
+        hmoDependents: benefits.hmoDependents,
+        bankName: benefits.bankName,
+        bankAccount: benefits.bankAccount,
+      },
     });
   } catch (error) {
-    console.error('Benefits fetch error:', error);
+    console.error('Get benefits error:', error);
     return NextResponse.json({ error: 'Failed to fetch benefits' }, { status: 500 });
   }
 }
