@@ -5,10 +5,12 @@ const KINTONE_USER = process.env.KINTONE_USER || '';
 const KINTONE_PASS = process.env.KINTONE_PASS || '';
 
 export async function GET() {
-  const authHeader = Buffer.from(`${KINTONE_USER}:${KINTONE_PASS}`).toString('base64');
+  const credentials = `${KINTONE_USER}:${KINTONE_PASS}`;
+  const authHeader = Buffer.from(credentials).toString('base64');
   
   try {
-    const url = `https://${KINTONE_DOMAIN}/k/v1/records.json?app=303&query=email%20%3D%20%22admin%40mscorp.com.ph%22`;
+    // Simpler query - just get records without query param
+    const url = `https://${KINTONE_DOMAIN}/k/v1/records.json?app=303`;
     
     const response = await fetch(url, {
       method: 'GET',
@@ -24,19 +26,22 @@ export async function GET() {
     return NextResponse.json({
       status: response.ok ? 'success' : 'error',
       httpStatus: response.status,
-      authHeader: authHeader.substring(0, 20) + '...',
+      // Show full auth header for debugging
+      authHeaderFull: authHeader,
+      authHeaderExpected: 'QWRtaW5pc3RyYXRvcjpFZGFtYW1lITIzNDU=',
+      authMatch: authHeader === 'QWRtaW5pc3RyYXRvcjpFZGFtYW1lITIzNDU=',
       user: KINTONE_USER,
-      passLength: KINTONE_PASS.length,
+      pass: KINTONE_PASS ? `${KINTONE_PASS.substring(0,3)}...${KINTONE_PASS.length}chars` : 'EMPTY',
       url,
-      response: data.records ? { recordCount: data.records.length } : data
+      recordCount: data.records?.length || 0,
+      error: data.message || data.code || null
     });
   } catch (error: any) {
     return NextResponse.json({
       status: 'exception',
       error: error.message,
-      authHeader: authHeader.substring(0, 20) + '...',
       user: KINTONE_USER,
-      passLength: KINTONE_PASS.length
+      pass: KINTONE_PASS ? `${KINTONE_PASS.substring(0,3)}...` : 'EMPTY'
     });
   }
 }
