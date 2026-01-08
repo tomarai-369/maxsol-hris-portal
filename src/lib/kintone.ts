@@ -1,12 +1,7 @@
-// Kintone API wrapper - Password Auth with full headers
+// Kintone API wrapper - Using API Token
 
 const KINTONE_DOMAIN = process.env.KINTONE_DOMAIN || 'ms-corp.cybozu.com';
-const KINTONE_USER = process.env.KINTONE_USER || 'Administrator';
-const KINTONE_PASS = process.env.KINTONE_PASS || '';
-
-function getAuthHeader(): string {
-  return Buffer.from(`${KINTONE_USER}:${KINTONE_PASS}`).toString('base64');
-}
+const KINTONE_API_TOKEN = process.env.KINTONE_API_TOKEN || 'RT0AStpKU187kN0in94Kc0p2OTqdsw1ocdg4Mxsw';
 
 export const KINTONE_APPS = {
   EMPLOYEES: 303,
@@ -27,10 +22,8 @@ async function kintoneRequest(endpoint: string, method: string = 'GET', body?: a
   const response = await fetch(url, {
     method,
     headers: {
-      'X-Cybozu-Authorization': getAuthHeader(),
+      'X-Cybozu-API-Token': KINTONE_API_TOKEN,
       'Content-Type': 'application/json',
-      'Accept': 'application/json',
-      'User-Agent': 'HRIS-Portal/1.0',
     },
     body: body && method !== 'GET' ? JSON.stringify(body) : undefined,
     cache: 'no-store',
