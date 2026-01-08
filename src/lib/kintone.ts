@@ -1,7 +1,7 @@
-// Kintone API wrapper - Using API Token
+// Kintone API wrapper - FIXED: Don't send Content-Type on GET requests
 
 const KINTONE_DOMAIN = process.env.KINTONE_DOMAIN || 'ms-corp.cybozu.com';
-const KINTONE_API_TOKEN = process.env.KINTONE_API_TOKEN || 'RT0AStpKU187kN0in94Kc0p2OTqdsw1ocdg4Mxsw';
+const KINTONE_API_TOKEN = process.env.KINTONE_API_TOKEN || '';
 
 export const KINTONE_APPS = {
   EMPLOYEES: 303,
@@ -19,14 +19,19 @@ export const KINTONE_APPS = {
 async function kintoneRequest(endpoint: string, method: string = 'GET', body?: any): Promise<any> {
   const url = `https://${KINTONE_DOMAIN}/k/v1/${endpoint}`;
   
+  // Only add Content-Type for POST/PUT requests, NOT for GET!
+  const headers: Record<string, string> = {
+    'X-Cybozu-API-Token': KINTONE_API_TOKEN,
+  };
+  
+  if (method !== 'GET') {
+    headers['Content-Type'] = 'application/json';
+  }
+
   const response = await fetch(url, {
     method,
-    headers: {
-      'X-Cybozu-API-Token': KINTONE_API_TOKEN,
-      'Content-Type': 'application/json',
-    },
+    headers,
     body: body && method !== 'GET' ? JSON.stringify(body) : undefined,
-    cache: 'no-store',
   });
 
   const data = await response.json();
@@ -97,9 +102,8 @@ export async function getEmployeeByEmail(email: string): Promise<Employee | null
 }
 
 export async function getEmployeeById(recordId: number): Promise<Employee | null> {
-  try {
-    return mapEmployee(await getRecord(KINTONE_APPS.EMPLOYEES, recordId));
-  } catch { return null; }
+  try { return mapEmployee(await getRecord(KINTONE_APPS.EMPLOYEES, recordId)); }
+  catch { return null; }
 }
 
 export async function getEmployeeByEmployeeId(employeeId: string): Promise<Employee | null> {
@@ -109,9 +113,7 @@ export async function getEmployeeByEmployeeId(employeeId: string): Promise<Emplo
 
 export async function updateEmployeePassword(recordId: number, passwordHash: string) {
   await updateRecord(KINTONE_APPS.EMPLOYEES, recordId, {
-    password_hash: { value: passwordHash },
-    is_verified: { value: 'Yes' },
-    verification_token: { value: '' },
+    password_hash: { value: passwordHash }, is_verified: { value: 'Yes' }, verification_token: { value: '' },
   });
 }
 
@@ -128,13 +130,12 @@ export async function updateEmployeeProfile(recordId: number, data: Partial<Empl
   await updateRecord(KINTONE_APPS.EMPLOYEES, recordId, record);
 }
 
-// Leave types
+// Leave types and functions
 export interface LeaveRequest {
   id: number; employeeId: string; employeeName: string; leaveType: string;
   startDate: string; endDate: string; totalDays: number; reason: string;
   status: string; approver?: string; approvedDate?: string; remarks?: string; createdAt: string;
 }
-
 export interface LeaveBalance { leaveType: string; totalCredits: number; used: number; remaining: number; }
 
 export async function getEmployeeLeaveRequests(employeeId: string): Promise<LeaveRequest[]> {
@@ -215,10 +216,7 @@ export interface DTRRecord {
 
 export async function getEmployeeDTR(employeeId: string, month?: string): Promise<DTRRecord[]> {
   let query = `employee_id = "${employeeId}"`;
-  if (month) {
-    const [year, m] = month.split('-');
-    query += ` and date >= "${year}-${m}-01" and date <= "${year}-${m}-31"`;
-  }
+  if (month) { const [year, m] = month.split('-'); query += ` and date >= "${year}-${m}-01" and date <= "${year}-${m}-31"`; }
   query += ' order by date desc limit 100';
   const response = await getRecords(KINTONE_APPS.DTR, query);
   return (response.records || []).map((r: any) => ({
@@ -259,7 +257,7 @@ export async function clockOut(recordId: number) {
   await updateRecord(KINTONE_APPS.DTR, recordId, { time_out: { value: timeNow } });
 }
 
-// Payroll types
+// Payroll
 export interface PayrollRecord {
   id: number; employeeId: string; periodStart: string; periodEnd: string;
   basicPay: number; overtimePay: number; holidayPay: number; allowances: number; grossPay: number;
@@ -286,11 +284,10 @@ export async function getEmployeePayroll(employeeId: string, year?: number): Pro
   }));
 }
 
-// Benefits types
+// Benefits
 export interface Benefits {
   employeeId: string; sssNumber: string; philhealthNumber: string; pagibigNumber: string; tinNumber: string;
-  hmoProvider: string; hmoPlan: string; hmoCardNumber: string; hmoDependents: number;
-  bankName: string; bankAccount: string;
+  hmoProvider: string; hmoPlan: string; hmoCardNumber: string; hmoDependents: number; bankName: string; bankAccount: string;
 }
 
 export async function getEmployeeBenefits(employeeId: string): Promise<Benefits | null> {
@@ -307,7 +304,7 @@ export async function getEmployeeBenefits(employeeId: string): Promise<Benefits 
   };
 }
 
-// Loans types
+// Loans
 export interface Loan {
   id: number; employeeId: string; loanType: string; principalAmount: number; interestRate: number;
   totalAmount: number; monthlyAmortization: number; totalPaid: number; balance: number;
