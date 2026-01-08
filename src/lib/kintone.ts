@@ -1,19 +1,20 @@
 // Kintone API wrapper for HRIS Portal
+// Updated: Force rebuild with individual tokens
 
 const KINTONE_DOMAIN = process.env.KINTONE_DOMAIN || 'ms-corp.cybozu.com';
 
 // Individual API tokens for each app
 const API_TOKENS: Record<number, string> = {
-  303: process.env.KINTONE_TOKEN_EMPLOYEES || '',      // Employees
-  304: process.env.KINTONE_TOKEN_LEAVE_REQUESTS || '', // Leave Requests
-  305: process.env.KINTONE_TOKEN_DOCUMENT_REQUESTS || '', // Document Requests
-  306: process.env.KINTONE_TOKEN_ANNOUNCEMENTS || '',  // Announcements
-  307: process.env.KINTONE_TOKEN_LEAVE_BALANCES || '', // Leave Balances
-  308: process.env.KINTONE_TOKEN_DTR || '',            // DTR
-  309: process.env.KINTONE_TOKEN_PAYROLL || '',        // Payroll
-  310: process.env.KINTONE_TOKEN_BENEFITS || '',       // Benefits
-  311: process.env.KINTONE_TOKEN_LOANS || '',          // Loans
-  312: process.env.KINTONE_TOKEN_SCHEDULES || '',      // Schedules
+  303: process.env.KINTONE_TOKEN_EMPLOYEES || '',
+  304: process.env.KINTONE_TOKEN_LEAVE_REQUESTS || '',
+  305: process.env.KINTONE_TOKEN_DOCUMENT_REQUESTS || '',
+  306: process.env.KINTONE_TOKEN_ANNOUNCEMENTS || '',
+  307: process.env.KINTONE_TOKEN_LEAVE_BALANCES || '',
+  308: process.env.KINTONE_TOKEN_DTR || '',
+  309: process.env.KINTONE_TOKEN_PAYROLL || '',
+  310: process.env.KINTONE_TOKEN_BENEFITS || '',
+  311: process.env.KINTONE_TOKEN_LOANS || '',
+  312: process.env.KINTONE_TOKEN_SCHEDULES || '',
 };
 
 // Fallback: parse comma-separated tokens (legacy support)
@@ -37,7 +38,7 @@ function getTokenForApp(appId: number): string {
     return COMBINED_TOKENS[index];
   }
   
-  // Last resort: use first token (for Employees app)
+  // Last resort: use first token
   return COMBINED_TOKENS[0] || '';
 }
 
@@ -78,16 +79,20 @@ async function kintoneRequest(
     targetAppId = body.app;
   }
   if (!targetAppId) {
-    // Try to extract from URL query params
     const match = endpoint.match(/app=(\d+)/);
     if (match) {
       targetAppId = parseInt(match[1]);
     }
   }
   
-  // Get the appropriate token for this app
-  const token = targetAppId ? getTokenForApp(targetAppId) : COMBINED_TOKENS[0];
+  // Default to Employees app if not specified
+  const token = targetAppId ? getTokenForApp(targetAppId) : getTokenForApp(303);
   
+  if (!token) {
+    console.error('No API token available for app:', targetAppId);
+    throw new Error('Missing Kintone API token');
+  }
+
   const headers: Record<string, string> = {
     'X-Cybozu-API-Token': token,
     'Content-Type': 'application/json',
