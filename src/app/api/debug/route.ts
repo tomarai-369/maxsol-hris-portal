@@ -1,38 +1,33 @@
 import { NextResponse } from 'next/server';
 
 const KINTONE_DOMAIN = process.env.KINTONE_DOMAIN || 'ms-corp.cybozu.com';
+const TOKEN_ANNOUNCEMENTS = process.env.KINTONE_TOKEN_ANNOUNCEMENTS || '';
 
 export async function GET() {
-  const results: Record<string, any> = {};
+  const today = new Date().toISOString().split('T')[0];
+  const query = `is_active in ("Yes") and publish_date <= "${today}" order by priority desc limit 20`;
+  const url = `https://${KINTONE_DOMAIN}/k/v1/records.json?app=306&query=${encodeURIComponent(query)}`;
   
-  // Test each app token
-  const apps = [
-    { id: 303, name: 'EMPLOYEES', token: process.env.KINTONE_TOKEN_EMPLOYEES },
-    { id: 306, name: 'ANNOUNCEMENTS', token: process.env.KINTONE_TOKEN_ANNOUNCEMENTS },
-  ];
-  
-  for (const app of apps) {
-    if (!app.token) {
-      results[app.name] = { error: 'No token configured' };
-      continue;
-    }
+  const results: any = {
+    token: TOKEN_ANNOUNCEMENTS ? TOKEN_ANNOUNCEMENTS.substring(0, 10) + '...' : 'MISSING',
+    query,
+    url
+  };
+
+  try {
+    const response = await fetch(url, {
+      method: 'GET',
+      headers: { 'X-Cybozu-API-Token': TOKEN_ANNOUNCEMENTS },
+    });
     
-    try {
-      const url = `https://${KINTONE_DOMAIN}/k/v1/records.json?app=${app.id}`;
-      const resp = await fetch(url, {
-        headers: { 'X-Cybozu-API-Token': app.token }
-      });
-      const data = await resp.json();
-      results[app.name] = {
-        status: resp.status,
-        ok: resp.ok,
-        records: data.records?.length || 0,
-        error: data.code || null
-      };
-    } catch (e: any) {
-      results[app.name] = { error: e.message };
-    }
+    const data = await response.json();
+    results.status = response.status;
+    results.records = data.records?.length || 0;
+    results.error = data.code || null;
+    results.message = data.message || null;
+  } catch (e: any) {
+    results.exception = e.message;
   }
-  
+
   return NextResponse.json(results);
 }
