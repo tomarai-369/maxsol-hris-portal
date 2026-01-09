@@ -1,33 +1,31 @@
 import { NextResponse } from 'next/server';
 
-const KINTONE_DOMAIN = process.env.KINTONE_DOMAIN || 'ms-corp.cybozu.com';
-const TOKEN_ANNOUNCEMENTS = process.env.KINTONE_TOKEN_ANNOUNCEMENTS || '';
-
 export async function GET() {
-  const today = new Date().toISOString().split('T')[0];
-  const query = `is_active in ("Yes") and publish_date <= "${today}" order by priority desc limit 20`;
-  const url = `https://${KINTONE_DOMAIN}/k/v1/records.json?app=306&query=${encodeURIComponent(query)}`;
+  const results: any = {};
   
-  const results: any = {
-    token: TOKEN_ANNOUNCEMENTS ? TOKEN_ANNOUNCEMENTS.substring(0, 10) + '...' : 'MISSING',
-    query,
-    url
-  };
-
+  // Test App 306 (Announcements)
+  const token306 = process.env.KINTONE_TOKEN_ANNOUNCEMENTS || '';
+  results.token306 = { length: token306.length, first10: token306.substring(0,10) };
+  
   try {
-    const response = await fetch(url, {
-      method: 'GET',
-      headers: { 'X-Cybozu-API-Token': TOKEN_ANNOUNCEMENTS },
+    const resp = await fetch('https://ms-corp.cybozu.com/k/v1/records.json?app=306', {
+      headers: { 'X-Cybozu-API-Token': token306 }
     });
-    
-    const data = await response.json();
-    results.status = response.status;
-    results.records = data.records?.length || 0;
-    results.error = data.code || null;
-    results.message = data.message || null;
-  } catch (e: any) {
-    results.exception = e.message;
-  }
+    const data = await resp.json();
+    results.app306 = { status: resp.status, records: data.records?.length, error: data.code };
+  } catch (e: any) { results.app306 = { error: e.message }; }
+
+  // Test App 308 (DTR)
+  const token308 = process.env.KINTONE_TOKEN_DTR || '';
+  results.token308 = { length: token308.length, first10: token308.substring(0,10) };
+  
+  try {
+    const resp = await fetch('https://ms-corp.cybozu.com/k/v1/records.json?app=308', {
+      headers: { 'X-Cybozu-API-Token': token308 }
+    });
+    const data = await resp.json();
+    results.app308 = { status: resp.status, records: data.records?.length, error: data.code };
+  } catch (e: any) { results.app308 = { error: e.message }; }
 
   return NextResponse.json(results);
 }
