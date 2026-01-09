@@ -1,44 +1,74 @@
 import { NextResponse } from 'next/server';
+import { getActiveAnnouncements, getRecords, KINTONE_APPS } from '@/lib/kintone';
 
 export async function GET() {
-  const KINTONE_DOMAIN = process.env.KINTONE_DOMAIN || 'ms-corp.cybozu.com';
   const results: any = {};
 
-  // Test each app token
-  const apps = [
-    { id: 303, name: 'Employees', tokenVar: 'KINTONE_TOKEN_EMPLOYEES' },
-    { id: 304, name: 'Leave Requests', tokenVar: 'KINTONE_TOKEN_LEAVE_REQUESTS' },
-    { id: 305, name: 'Document Requests', tokenVar: 'KINTONE_TOKEN_DOCUMENT_REQUESTS' },
-    { id: 306, name: 'Announcements', tokenVar: 'KINTONE_TOKEN_ANNOUNCEMENTS' },
-    { id: 307, name: 'Leave Balances', tokenVar: 'KINTONE_TOKEN_LEAVE_BALANCES' },
-    { id: 308, name: 'DTR', tokenVar: 'KINTONE_TOKEN_DTR' },
-    { id: 309, name: 'Payroll', tokenVar: 'KINTONE_TOKEN_PAYROLL' },
-    { id: 310, name: 'Benefits', tokenVar: 'KINTONE_TOKEN_BENEFITS' },
-    { id: 311, name: 'Loans', tokenVar: 'KINTONE_TOKEN_LOANS' },
-    { id: 312, name: 'Schedules', tokenVar: 'KINTONE_TOKEN_SCHEDULES' },
-  ];
+  // Test 1: Direct Kintone call for Employees (303)
+  try {
+    const empData = await getRecords(KINTONE_APPS.EMPLOYEES, '', undefined, false);
+    results.employees = {
+      status: 'ok',
+      count: empData.records?.length || 0
+    };
+  } catch (e: any) {
+    results.employees = { status: 'error', message: e.message };
+  }
 
-  for (const app of apps) {
-    const token = process.env[app.tokenVar] || '';
-    const url = `https://${KINTONE_DOMAIN}/k/v1/records.json?app=${app.id}`;
-    
-    try {
-      const response = await fetch(url, {
-        method: 'GET',
-        headers: { 'X-Cybozu-API-Token': token },
-      });
-      const data = await response.json();
-      results[app.name] = {
-        appId: app.id,
-        tokenSet: !!token,
-        status: response.status,
-        ok: response.ok,
-        records: data.records?.length || 0,
-        error: data.code || null
-      };
-    } catch (e: any) {
-      results[app.name] = { appId: app.id, error: e.message };
-    }
+  // Test 2: Announcements (306)
+  try {
+    const annData = await getActiveAnnouncements();
+    results.announcements = {
+      status: 'ok',
+      count: annData.length,
+      sample: annData[0]?.title || null
+    };
+  } catch (e: any) {
+    results.announcements = { status: 'error', message: e.message };
+  }
+
+  // Test 3: Leave Balances (307)
+  try {
+    const lbData = await getRecords(KINTONE_APPS.LEAVE_BALANCES, '', undefined, false);
+    results.leaveBalances = {
+      status: 'ok',
+      count: lbData.records?.length || 0
+    };
+  } catch (e: any) {
+    results.leaveBalances = { status: 'error', message: e.message };
+  }
+
+  // Test 4: Leave Requests (304)
+  try {
+    const lrData = await getRecords(KINTONE_APPS.LEAVE_REQUESTS, '', undefined, false);
+    results.leaveRequests = {
+      status: 'ok',
+      count: lrData.records?.length || 0
+    };
+  } catch (e: any) {
+    results.leaveRequests = { status: 'error', message: e.message };
+  }
+
+  // Test 5: DTR (308)
+  try {
+    const dtrData = await getRecords(KINTONE_APPS.DTR, '', undefined, false);
+    results.dtr = {
+      status: 'ok',
+      count: dtrData.records?.length || 0
+    };
+  } catch (e: any) {
+    results.dtr = { status: 'error', message: e.message };
+  }
+
+  // Test 6: Payroll (309)
+  try {
+    const payData = await getRecords(KINTONE_APPS.PAYROLL, '', undefined, false);
+    results.payroll = {
+      status: 'ok',
+      count: payData.records?.length || 0
+    };
+  } catch (e: any) {
+    results.payroll = { status: 'error', message: e.message };
   }
 
   return NextResponse.json(results);
