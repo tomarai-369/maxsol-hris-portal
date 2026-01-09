@@ -351,3 +351,4 @@ export async function getEmployeeLoans(employeeId: string): Promise<Loan[]> {
     startDate: r.start_date?.value || '', endDate: r.end_date?.value || '', status: r.status?.value || '',
   }));
 }
+// Deployed at Fri Jan  9 00:15:25 UTC 2026
